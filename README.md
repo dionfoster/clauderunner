@@ -221,7 +221,8 @@ This example:
 3. Waits for Docker to be ready by polling `docker info`
 4. Configures polling behavior with custom retry settings:
    - Up to 15 retry attempts
-   - 4 seconds between each attempt   - Requires 2 consecutive successful checks
+   - 4 seconds between each attempt   
+   - Requires 2 consecutive successful checks
    - Will wait up to 60 seconds total
 
 ## Usage
