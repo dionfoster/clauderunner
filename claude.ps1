@@ -146,13 +146,6 @@ function Transform-CommandForLaunch {
                 CommandType = "powershell"
             }
         }
-        "background" {
-            $executable, $arguments = Get-ExecutableAndArgs -Command $Command
-            return @{
-                Command = Build-StartProcessCommand -Executable $executable -Arguments $arguments -WorkingDirectory $WorkingDirectory -WindowStyle "Hidden"
-                CommandType = "powershell"
-            }
-        }
         default { # "console"
             if ($WorkingDirectory) {
                 return @{
@@ -278,10 +271,10 @@ function Test-ContinueAfter {
     param(
         [string]$Command,
         [string]$StateName,
-        [int]$MaxRetries = 24,
-        [int]$RetryInterval = 5,
-        [int]$SuccessfulRetries = 3,
-        [int]$MaxTimeSeconds = 120
+        [int]$MaxRetries = 10,
+        [int]$RetryInterval = 3,
+        [int]$SuccessfulRetries = 1,
+        [int]$MaxTimeSeconds = 30
     )
     
     $attempt = 0
@@ -428,8 +421,8 @@ function Test-StateConfiguration {
     if ($StateConfig.run) {
         foreach ($action in $StateConfig.run) {
             if ($action -is [string]) { continue }
-            if (-not ($action.command -or $action.powershell -or $action.cmd -or $action.app)) {
-                throw "Invalid action in state '$StateName': must have 'command', 'powershell', 'cmd', or 'app'"
+            if (-not ($action.command -or $action.app)) {
+                throw "Invalid action in state '$StateName': must have 'command' or 'app'"
             }
         }
     }
@@ -447,15 +440,11 @@ function Run-State {
         Write-StateLog $StateName "State $StateName already processed in this run" "DEBUG"
         return $true
     }
-    
-    # Get state configuration - support both 'state' and 'states' root keys
+      # Get state configuration - only using 'states' root key
     $stateConfig = $null
-    if ($Config.state -and $Config.state.$StateName) {
-        $stateConfig = $Config.state.$StateName
-    } elseif ($Config.states -and $Config.states.$StateName) {
+    if ($Config.states -and $Config.states.$StateName) {
         $stateConfig = $Config.states.$StateName
     }
-    
     if (-not $stateConfig) {
         Write-StateLog $StateName "Unknown state: $StateName" "ERROR"
         return $false
@@ -506,8 +495,7 @@ function Run-State {
                 LaunchVia = "console"
                 WorkingDirectory = ""
             }
-            
-            if ($action -is [string]) {
+              if ($action -is [string]) {
                 # Simple string command - default to PowerShell
                 $params.Command = $action
             } elseif ($action.command) {
@@ -518,14 +506,6 @@ function Run-State {
                 # App launch - always use windowsApp
                 $params.Command = $action.app
                 $params.LaunchVia = "windowsApp"
-            } elseif ($action.powershell) {
-                # Explicit PowerShell command
-                $params.Command = $action.powershell
-                $params.CommandType = "powershell"
-            } elseif ($action.cmd) {
-                # Explicit CMD command
-                $params.Command = $action.cmd
-                $params.CommandType = "cmd"
             } else {
                 Write-StateLog $StateName "Invalid action format in state $StateName" "ERROR"
                 continue
