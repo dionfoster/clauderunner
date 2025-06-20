@@ -41,12 +41,13 @@ states:
 
   # Frontend state that prepares and starts the SPA
   nodeReady:
+    needs: [apiReady]
     actions:
       - type: command
         command: Set-NodeVersion -Version v22.16.0
 
       - type: command
-        command: node --version        
+        command: node --version
       
       - type: command
         command: npm install

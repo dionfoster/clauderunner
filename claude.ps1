@@ -2,7 +2,8 @@
 param(
     [ValidateNotNullOrEmpty()]
     [string]$Target = "apiReady",
-    [switch]$Verbose
+    [switch]$Verbose,
+    [switch]$UseStateMachineLogging
 )
 
 $script:ConfigPath = "claude.yml"
@@ -21,6 +22,13 @@ Set-LogPath -Path $script:LogPath
 Set-ConfigPath -Path $script:ConfigPath
 # Set the global verbose flag for command execution
 $global:Verbose = $Verbose
+
+# Set the logging mode based on parameter
+if ($UseStateMachineLogging) {
+    Set-LoggingMode -Mode "StateMachine"
+} else {
+    Set-LoggingMode -Mode "Standard"
+}
 
 function Invoke-State {
     param(
@@ -44,7 +52,8 @@ function Invoke-State {
         Write-StateLog $StateName "Unknown state: $StateName" "ERROR"
         return $false
     }
-      # Validate configuration    
+    
+    # Validate configuration    
     try {
         Configuration\Test-StateConfiguration -StateConfig $stateConfig -StateName $StateName
     }
@@ -53,33 +62,93 @@ function Invoke-State {
         return $false
     }
     
-    Write-StateLog $StateName "Processing state: $StateName" "INFO"
+    # Get dependencies
+    $dependencies = @()
+    if ($stateConfig.needs) {
+        $dependencies = $stateConfig.needs
+    }
+    
+    # State Machine Logging - Start State Processing
+    if ($UseStateMachineLogging) {
+        Start-StateProcessing -StateName $StateName -Dependencies $dependencies
+    }
+    else {
+        Write-StateLog $StateName "Processing state: $StateName" "INFO"
+    }
     
     # Handle dependencies first
     if ($stateConfig.needs) {
-        $depList = $stateConfig.needs -join ', '
-        Write-StateLog $StateName "Resolving dependencies for $StateName`: $depList" "INFO"
+        if (-not $UseStateMachineLogging) {
+            $depList = $stateConfig.needs -join ', '
+            Write-StateLog $StateName "Resolving dependencies for $StateName`: $depList" "INFO"
+        }
+        
         foreach ($dependency in $stateConfig.needs) {
             if (-not (Invoke-State -StateName $dependency -Config $Config -ProcessedStates $ProcessedStates)) {
                 Write-StateLog $StateName "Dependency $dependency failed for state $StateName" "ERROR"
                 return $false
             }
-        }    }
+        }
+    }
     
     # Perform pre-check if defined
     $skipActions = $false
     
     if ($stateConfig.readiness) {
         if ($stateConfig.readiness.checkEndpoint) {
-            Write-StateLog $StateName "Checking if $StateName is already ready using endpoint..." "INFO"
+            # Standard logging
+            if (-not $UseStateMachineLogging) {
+                Write-StateLog $StateName "Checking if $StateName is already ready using endpoint..." "INFO"
+            }
+            # State Machine logging
+            else {
+                Write-StateCheck -StateName $StateName -CheckType "Endpoint" -CheckDetails $stateConfig.readiness.checkEndpoint
+            }
+            
             if (ReadinessChecks\Test-WebEndpoint -Uri $stateConfig.readiness.checkEndpoint -StateName $StateName) {
-                Write-StateLog $StateName "✓ State $StateName is already ready via endpoint check, skipping actions" "SUCCESS"
+                # Standard logging
+                if (-not $UseStateMachineLogging) {
+                    Write-StateLog $StateName "✓ State $StateName is already ready via endpoint check, skipping actions" "SUCCESS"
+                }
+                # State Machine logging
+                else {
+                    Write-StateCheckResult -StateName $StateName -IsReady $true -CheckType "Endpoint" -AdditionalInfo "Status: 200"
+                }
+                
                 $skipActions = $true
+            }
+            else {
+                # State Machine logging
+                if ($UseStateMachineLogging) {
+                    Write-StateCheckResult -StateName $StateName -IsReady $false -CheckType "Endpoint"
+                }
             }
         }
         elseif ($stateConfig.readiness.checkCommand) {
-            if (ReadinessChecks\Test-PreCheck -CheckCommand $stateConfig.readiness.checkCommand -StateName $StateName -StateConfig $stateConfig) {
+            # Standard logging
+            if (-not $UseStateMachineLogging) {
+                Write-StateLog $StateName "Checking if $StateName is already ready using command..." "INFO"
+            }
+            # State Machine logging
+            else {
+                Write-StateCheck -StateName $StateName -CheckType "Command" -CheckDetails $stateConfig.readiness.checkCommand
+            }
+            
+            $isReady = ReadinessChecks\Test-PreCheck -CheckCommand $stateConfig.readiness.checkCommand -StateName $StateName -StateConfig $stateConfig
+            
+            if ($isReady) {
+                # State Machine logging
+                if ($UseStateMachineLogging) {
+                    Write-StateCheckResult -StateName $StateName -IsReady $true -CheckType "Command"
+                }
+                
                 $skipActions = $true
+            }
+            else {
+                # State Machine logging
+                if ($UseStateMachineLogging) {
+                    Write-StateCheckResult -StateName $StateName -IsReady $false -CheckType "Command"
+                }
             }
         }
     }
@@ -92,7 +161,14 @@ function Invoke-State {
     
     # Execute actions
     if ($stateConfig.actions) {
-        Write-StateLog $StateName "Executing actions for $StateName" "INFO"
+        # Standard logging
+        if (-not $UseStateMachineLogging) {
+            Write-StateLog $StateName "Executing actions for $StateName" "INFO"
+        }
+        # State Machine logging
+        else {
+            Start-StateActions -StateName $StateName
+        }
         
         foreach ($action in $stateConfig.actions) {
             $params = @{
@@ -125,8 +201,32 @@ function Invoke-State {
             if ($action.description) { $params.Description = $action.description }
             if ($action.workingDirectory) { $params.WorkingDirectory = $action.workingDirectory }
             if ($action.newWindow) { $params.LaunchVia = "newWindow" }
-              if (-not (CommandExecution\Invoke-Command @params)) {
-                Write-StateLog $StateName "Action failed in state $StateName" "ERROR"
+            
+            # State Machine logging - start action
+            if ($UseStateMachineLogging) {
+                $actionType = if ($action.type -eq "application") { "Application" } else { "Command" }
+                $actionCommand = if ($action -is [string]) { $action } elseif ($action.type -eq "command") { $action.command } else { $action.path }
+                $actionDescription = if ($action.description) { $action.description } else { "" }
+                
+                $actionId = Start-StateAction -StateName $StateName -ActionType $actionType -ActionCommand $actionCommand -Description $actionDescription
+            }
+            
+            $actionSuccess = CommandExecution\Invoke-Command @params
+            
+            # State Machine logging - complete action
+            if ($UseStateMachineLogging) {
+                Complete-StateAction -StateName $StateName -ActionId $actionId -Success $actionSuccess
+            }
+            
+            if (-not $actionSuccess) {
+                # State Machine logging - complete state with failure
+                if ($UseStateMachineLogging) {
+                    Complete-State -StateName $StateName -Success $false -ErrorMessage "Action failed"
+                }
+                else {
+                    Write-StateLog $StateName "Action failed in state $StateName" "ERROR"
+                }
+                
                 return $false
             }
         }
@@ -150,7 +250,14 @@ function Invoke-State {
             Write-StateLog $StateName "Using wait endpoint for readiness polling: $($stateConfig.readiness.waitEndpoint)" "INFO"
             
             if (-not (ReadinessChecks\Test-EndpointReadiness -Uri $stateConfig.readiness.waitEndpoint -StateName $StateName -MaxRetries $maxRetries -RetryInterval $retryInterval -SuccessfulRetries $successfulRetries -MaxTimeSeconds $maxTimeSeconds)) {
-                Write-StateLog $StateName "State $StateName failed to become ready" "ERROR"
+                # State Machine logging - complete state with failure
+                if ($UseStateMachineLogging) {
+                    Complete-State -StateName $StateName -Success $false -ErrorMessage "Failed to become ready via endpoint polling"
+                }
+                else {
+                    Write-StateLog $StateName "State $StateName failed to become ready" "ERROR"
+                }
+                
                 return $false
             }
         }
@@ -159,7 +266,14 @@ function Invoke-State {
             $command = $stateConfig.readiness.waitCommand
             
             if (-not (ReadinessChecks\Test-ContinueAfter -Command $command -StateName $StateName -MaxRetries $maxRetries -RetryInterval $retryInterval -SuccessfulRetries $successfulRetries -MaxTimeSeconds $maxTimeSeconds -StateConfig $stateConfig)) {
-                Write-StateLog $StateName "State $StateName failed to become ready" "ERROR"
+                # State Machine logging - complete state with failure
+                if ($UseStateMachineLogging) {
+                    Complete-State -StateName $StateName -Success $false -ErrorMessage "Failed to become ready via command polling"
+                }
+                else {
+                    Write-StateLog $StateName "State $StateName failed to become ready" "ERROR"
+                }
+                
                 return $false
             }
         }
@@ -167,7 +281,15 @@ function Invoke-State {
     
     # Mark state as processed for this run
     $ProcessedStates.Add($StateName) | Out-Null
-    Write-StateLog $StateName "State $StateName completed successfully" "SUCCESS"
+    
+    # State Machine logging - complete state with success
+    if ($UseStateMachineLogging) {
+        Complete-State -StateName $StateName -Success $true
+    }
+    else {
+        Write-StateLog $StateName "State $StateName completed successfully" "SUCCESS"
+    }
+    
     return $true
 }
 
@@ -176,8 +298,17 @@ function Invoke-State {
 
 
 # Main execution
-try {    Write-Log "Starting Claude MCP-style Task Runner" "INFO"    
-    Write-Log "Target state: $Target" "INFO"
+try {
+    # Standard logging
+    if (-not $UseStateMachineLogging) {
+        Write-Log "Starting Claude MCP-style Task Runner" "INFO"    
+        Write-Log "Target state: $Target" "INFO"
+    }
+    # State Machine logging
+    else {
+        Write-Log "▶️ Claude Task Runner (Target: $Target)" "INFO"
+        Write-Log "📋 Configuration loaded from $script:ConfigPath" "INFO"
+    }
     
     Configuration\Initialize-Environment
     $config = Get-Configuration
@@ -187,23 +318,37 @@ try {    Write-Log "Starting Claude MCP-style Task Runner" "INFO"
     
     $success = Invoke-State -StateName $Target -Config $config -ProcessedStates $processedStates
     
-    # Show summary of what was processed
-    Write-Log "=== Run Summary ===" "INFO"
-    if ($processedStates.Count -gt 0) {
-        foreach ($stateName in $processedStates | Sort-Object) {
-            $icon = Get-StateIcon $stateName
-            Write-Host ("{0}{1}: ✅ PROCESSED" -f $icon, $stateName) -ForegroundColor "Green"
+    # Standard logging - Show summary
+    if (-not $UseStateMachineLogging) {
+        Write-Log "=== Run Summary ===" "INFO"
+        if ($processedStates.Count -gt 0) {
+            foreach ($stateName in $processedStates | Sort-Object) {
+                $icon = Get-StateIcon $stateName
+                Write-Host ("{0}{1}: ✅ PROCESSED" -f $icon, $stateName) -ForegroundColor "Green"
+            }
+        } else {
+            Write-Host "No states were processed (all checks passed)" -ForegroundColor "Yellow"
         }
-    } else {
-        Write-Host "No states were processed (all checks passed)" -ForegroundColor "Yellow"
+        
+        if ($success) {
+            Write-Log "🎉 Task runner completed successfully!" "SUCCESS"
+            exit 0
+        } else {
+            Write-Log "❌ Task runner failed" "ERROR"
+            exit 1
+        }
     }
-    
-    if ($success) {
-        Write-Log "🎉 Task runner completed successfully!" "SUCCESS"
-        exit 0
-    } else {
-        Write-Log "❌ Task runner failed" "ERROR"
-        exit 1
+    # State Machine logging - Show summary
+    else {
+        Write-StateSummary -Success $success
+        
+        if ($success) {
+            Write-Log "🎉 Task runner completed successfully!" "SUCCESS"
+            exit 0
+        } else {
+            Write-Log "❌ Task runner failed" "ERROR"
+            exit 1
+        }
     }
 }
 catch {
