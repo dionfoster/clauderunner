@@ -1,0 +1,28 @@
+# GitHub Copilot Configuration
+editor:
+  tabSize: 4
+  insertSpaces: true
+  lineEndings: crlf
+
+patterns:
+  - name: "PowerShell Task Runner Patterns"
+    files: ["**/*.ps1"]
+    suggestions:
+      - prefer: "Write-Log"
+        over: "Write-Host"
+        reason: "Use consistent logging mechanism"
+      - prefer: "try { ... } catch { ... }"
+        over: "trap { ... }"
+        reason: "Prefer explicit error handling"
+      - prefer: "param([Parameter(Mandatory)]"
+        over: "param([ValidateNotNullOrEmpty()]"
+        reason: "Use standard PowerShell parameter validation"
+
+analysis:
+  include:
+    - "**/*.ps1"
+    - "**/*.yml"
+    - "**/*.yaml"
+  exclude:
+    - "**/*.log"
+    - "**/node_modules/**"
