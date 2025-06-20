@@ -79,20 +79,19 @@ function Write-Log {
         "ERROR" { $color = "Red"; $emoji = "❌ " }
         "DEBUG" { $color = "Cyan"; $emoji = "🔍 " }
     }
-    
-    # In standard mode, use original format
+      # In standard mode, use original format
     if ($script:LoggingMode -eq "Standard") {
-        $fullMessage = "$timestamp [$Level] - $emoji$Message"
+        $fullMessage = "[$timestamp] [$Level] $emoji$Message"
         Write-Host $fullMessage -ForegroundColor $color
     }
     # In state machine mode, use simplified format for non-state logs
     else {
-        $fullMessage = "[$timestamp] [$Level] $emoji$Message"
+        $fullMessage = "[$Level] $emoji$Message"
         Write-Host $fullMessage -ForegroundColor $color
     }
     
     # Always log to file in the same format
-    $logMessage = "$timestamp [$Level] - $emoji$Message"
+    $logMessage = "[$timestamp] [$Level] $emoji$Message"
     $logMessage | Out-File -FilePath $script:LogPath -Append -Encoding UTF8
 }
 
@@ -229,10 +228,16 @@ function Start-StateProcessing {
         "Status" = "Processing"
         "Dependencies" = $Dependencies
         "Actions" = @()
+    }    # Format dependencies with check marks
+    $depText = if ($Dependencies.Count -gt 0) { 
+        $formattedDeps = $Dependencies | ForEach-Object { "$_✓" }
+        "Dependencies: $($formattedDeps -join ', ')" 
+    } else { 
+        "Dependencies: none" 
     }
     
-    $depText = if ($Dependencies.Count -gt 0) { "Dependencies: $($Dependencies -join ', ')" } else { "Dependencies: none" }
-    
+    # Add empty line before new state for better readability
+    Write-Host ""
     Write-Host "┌─ STATE: $($script:StatusIcons['Processing']) $stateIcon$StateName" -ForegroundColor Cyan
     Write-Host "│  ├─ $depText" -ForegroundColor Gray
     
@@ -271,8 +276,7 @@ function Write-StateCheck {
         [Parameter(Mandatory=$true)]
         [string]$CheckDetails
     )
-    
-    if ($script:LoggingMode -ne "StateMachine") {
+      if ($script:LoggingMode -ne "StateMachine") {
         return
     }
     
@@ -317,37 +321,40 @@ function Write-StateCheckResult {
         [Parameter(Mandatory=$false)]
         [string]$AdditionalInfo = ""
     )
-    
-    if ($script:LoggingMode -ne "StateMachine") {
+      if ($script:LoggingMode -ne "StateMachine") {
         return
     }
     
     $status = if ($IsReady) { $script:StatusIcons['Ready'] } else { $script:StatusIcons['NotReady'] }
     $resultText = if ($IsReady) { "READY" } else { "NOT READY" }
     $resultColor = if ($IsReady) { "Green" } else { "Yellow" }
-    $additionalText = if ($AdditionalInfo) { " ($AdditionalInfo)" } else { "" }
+      $resultInfo = if ($CheckType -eq "Command") {
+        "already ready via command check"
+    } elseif ($CheckType -eq "Endpoint" -and $AdditionalInfo -match "Status: (\d+)") {
+        "endpoint status: $($Matches[1]) OK"
+    } else {
+        if ($IsReady) { "already ready via $($CheckType.ToLower()) check" } 
+        else { "proceeding with actions" }
+        
+        if ($AdditionalInfo -and -not $IsReady) { " ($AdditionalInfo)" } else { "" }
+    }
     
     if ($IsReady) {
-        Write-Host "│  └─ Result: $status $resultText (already ready via $CheckType check)$additionalText" -ForegroundColor $resultColor
-        
-        # Final status for the state
-        Write-Host ""
+        Write-Host "│  └─ Result: $status $resultText ($resultInfo)" -ForegroundColor $resultColor
         
         # Update state tracking
         $script:ProcessedStates[$StateName]["Status"] = "Completed"
         $script:ProcessedStates[$StateName]["Result"] = "Already ready via $CheckType check"
         
         # Log to file
-        $logMessage = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') [SUCCESS] - │  └─ Result: $status $resultText (already ready via $CheckType check)$additionalText"
-        $logMessage | Out-File -FilePath $script:LogPath -Append -Encoding UTF8
-        $logMessage = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') [INFO] - "
+        $logMessage = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') [SUCCESS] - │  └─ Result: $status $resultText ($resultInfo)"
         $logMessage | Out-File -FilePath $script:LogPath -Append -Encoding UTF8
     }
     else {
-        Write-Host "│  └─ Result: $status $resultText (proceeding with actions)$additionalText" -ForegroundColor $resultColor
+        Write-Host "│  └─ Result: $status $resultText (proceeding with actions)" -ForegroundColor $resultColor
         
         # Log to file
-        $logMessage = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') [INFO] - │  └─ Result: $status $resultText (proceeding with actions)$additionalText"
+        $logMessage = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') [INFO] - │  └─ Result: $status $resultText (proceeding with actions)"
         $logMessage | Out-File -FilePath $script:LogPath -Append -Encoding UTF8
     }
 }
@@ -367,8 +374,7 @@ function Start-StateActions {
         [Parameter(Mandatory=$true)]
         [string]$StateName
     )
-    
-    if ($script:LoggingMode -ne "StateMachine") {
+      if ($script:LoggingMode -ne "StateMachine") {
         return
     }
     
@@ -413,8 +419,7 @@ function Start-StateAction {
         [Parameter(Mandatory=$false)]
         [string]$Description = ""
     )
-    
-    if ($script:LoggingMode -ne "StateMachine") {
+      if ($script:LoggingMode -ne "StateMachine") {
         return
     }
     
@@ -474,8 +479,7 @@ function Complete-StateAction {
         [Parameter(Mandatory=$false)]
         [string]$ErrorMessage = ""
     )
-    
-    if ($script:LoggingMode -ne "StateMachine") {
+      if ($script:LoggingMode -ne "StateMachine") {
         return
     }
     
@@ -549,8 +553,7 @@ function Complete-State {
         [Parameter(Mandatory=$false)]
         [string]$ErrorMessage = ""
     )
-    
-    if ($script:LoggingMode -ne "StateMachine") {
+      if ($script:LoggingMode -ne "StateMachine") {
         return
     }
     
@@ -615,9 +618,7 @@ function Write-StateSummary {
     param(
         [Parameter(Mandatory=$true)]
         [bool]$Success
-    )
-    
-    if ($script:LoggingMode -ne "StateMachine") {
+    )    if ($script:LoggingMode -ne "StateMachine") {
         return
     }
     
@@ -628,10 +629,19 @@ function Write-StateSummary {
     $successfulStates = $script:ProcessedStates.Keys | Where-Object { $script:ProcessedStates[$_]["Status"] -eq "Completed" }
     $failedStates = $script:ProcessedStates.Keys | Where-Object { $script:ProcessedStates[$_]["Status"] -eq "Failed" }
     
+    # Define standard order for states (to match template format)
+    $stateOrder = @("dockerStartup", "dockerReady", "apiReady", "nodeReady")
+    
+    # Sort successful states based on standard order if they exist in the order array
+    $sortedSuccessfulStates = $successfulStates | Sort-Object { 
+        $index = [array]::IndexOf($stateOrder, $_)
+        if ($index -eq -1) { [int]::MaxValue } else { $index }
+    }
+    
     Write-Host "SUMMARY:" -ForegroundColor Cyan
     
-    if ($successfulStates.Count -gt 0) {
-        $stateList = $successfulStates -join ", "
+    if ($sortedSuccessfulStates.Count -gt 0) {
+        $stateList = $sortedSuccessfulStates -join ", "
         Write-Host "$($script:StatusIcons['Completed']) Successfully processed: $stateList" -ForegroundColor Green
         
         # Log to file
@@ -653,7 +663,8 @@ function Write-StateSummary {
     # Log to file
     $logMessage = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') [INFO] - ⏱️ Total time: $totalDuration`s"
     $logMessage | Out-File -FilePath $script:LogPath -Append -Encoding UTF8
-      # Reset state machine variables for next run
+    
+    # Reset state machine variables for next run
     $script:StateTransitionStarted = $false
     $script:StateStartTimes = @{}
     $script:ActionStartTimes = @{}
