@@ -78,7 +78,10 @@ function Write-Log {
         "WARN" { $color = "Yellow"; $emoji = "⚠️ " }
         "ERROR" { $color = "Red"; $emoji = "❌ " }
         "DEBUG" { $color = "Cyan"; $emoji = "🔍 " }
-    }    if ($script:LoggingMode -eq "Standard") {        # Standard mode - include timestamp
+    }
+    
+    if ($script:LoggingMode -eq "Standard") {
+        # Standard mode - include timestamp
         $fullMessage = "[$timestamp] [$Level] $emoji$Message"
         Write-Host $fullMessage -ForegroundColor $color
         
@@ -87,7 +90,7 @@ function Write-Log {
         $logMessage | Out-File -FilePath $script:LogPath -Append -Encoding UTF8
     }
     else {
-        # State machine mode - no timestamp in console, simpler format
+        # State machine mode - handle special cases
         if ($Level -eq "SYSTEM") {
             # State machine headers are printed as-is
             Write-Host $Message -ForegroundColor $color
@@ -95,20 +98,36 @@ function Write-Log {
             # Log with timestamp to file
             $logMessage = "[$timestamp] [INFO] $Message"
             $logMessage | Out-File -FilePath $script:LogPath -Append -Encoding UTF8
+            return
         }
-        elseif ($Level -in @("INFO", "SUCCESS", "ERROR")) {
-            # For state command execution messages, suppress timestamps
-            if ($Message -match "Execute command:|completed successfully|command failed") {
-                return
-            }
-            
-            # For other main status messages, use state machine format
-            Write-Host "[$Level] $emoji$Message" -ForegroundColor $color
-            
-            # Log with timestamp to file
+
+        # Suppress various types of legacy messages in state machine mode
+        if ($Message -match "Checking if .* is already ready using command" -or
+            $Message -match "State .* is already ready, skipping actions" -or
+            $Message -match "Checking endpoint:" -or
+            $Message -match "Endpoint check passed:" -or
+            $Message -match "Starting .*: npm run" -or
+            $Message -match "Execute command:" -or
+            $Message -match "completed successfully" -or
+            $Message -match "command failed") {
+            # Only log to file for record keeping
             $logMessage = "[$timestamp] [$Level] $emoji$Message"
             $logMessage | Out-File -FilePath $script:LogPath -Append -Encoding UTF8
+            return
         }
+
+        # For other messages in state machine mode
+        if (-not $Message.StartsWith("STATE TRANSITIONS:") -and 
+            -not $Message.StartsWith("SUMMARY:")) {
+            # Add proper indentation for state machine visualization
+            $Message = $Message -replace "^", "│  "
+        }
+        
+        Write-Host $Message -ForegroundColor $color
+        
+        # Log with timestamp to file
+        $logMessage = "[$timestamp] [$Level] $emoji$Message"
+        $logMessage | Out-File -FilePath $script:LogPath -Append -Encoding UTF8
     }
 }
 
