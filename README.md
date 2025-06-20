@@ -1,6 +1,6 @@
 # Claude Task Runner
 
-A PowerShell-based task orchestration tool for managing complex application startup dependencies with Docker, .NET, Node.js and other services.
+A Task Runner from the Depths of a ChatGPT Hallucination.  PowerShell-based task orchestration tool for managing complex application startup dependencies with Docker, .NET, Node.js and other services.
 
 ## Overview
 
