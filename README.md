@@ -80,7 +80,7 @@ run:
 |--------|-------------|
 | `command` | The command to execute |
 | `app` | Path to application executable to launch |
-| `dir` | Working directory for the command |
+| `dir` | Working directory for the command (original directory is restored after execution) |
 | `desc` | Description of the command (for logs) |
 | `window` | When true, launches in a new window |
 | `timeout` | Command timeout in seconds |
@@ -220,13 +220,16 @@ run:
   - app: 'C:\Program Files\Docker\Docker\Docker Desktop.exe'
 ```
 
-## Customizing the Runner
+## Working Directory Handling
 
-You can extend the task runner by:
+When commands specify a working directory with the `dir` option, the task runner:
 
-1. Adding new state icon mappings in the `Get-StateIcon` function
-2. Modifying error patterns in the `Test-OutputForErrors` function
-3. Adding new command transformation methods in `Transform-CommandForLaunch`
+1. Saves the current working directory
+2. Changes to the specified directory
+3. Executes the command
+4. Restores the original working directory
+
+This ensures that each command runs in its specified directory without affecting subsequent commands, maintaining proper isolation between tasks.
 
 ## Troubleshooting
 
@@ -236,6 +239,14 @@ You can extend the task runner by:
 - **Docker commands failing**: Ensure Docker Desktop is running
 - **Command timeout**: Increase timeout values for long-running commands
 - **Path issues**: Use absolute paths and proper escaping in YAML
+
+## Customizing the Runner
+
+You can extend the task runner by:
+
+1. Adding new state icon mappings in the `Get-StateIcon` function
+2. Modifying error patterns in the `Test-OutputForErrors` function
+3. Adding new command transformation methods in `Transform-CommandForLaunch`
 
 ### Debugging
 

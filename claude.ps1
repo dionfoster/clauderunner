@@ -134,6 +134,7 @@ function Transform-CommandForLaunch {
             return @{
                 Command = "start `"`" `"$Command`""
                 CommandType = "cmd"
+                PreserveWorkingDir = $false
             }
         }
         "newWindow" {
@@ -141,18 +142,22 @@ function Transform-CommandForLaunch {
             return @{
                 Command = Build-StartProcessCommand -Executable $executable -Arguments $arguments -WorkingDirectory $WorkingDirectory -WindowStyle "Normal"
                 CommandType = "powershell"
+                PreserveWorkingDir = $false
             }
         }
         default { # "console"
             if ($WorkingDirectory) {
                 return @{
-                    Command = "Set-Location `"$WorkingDirectory`"; $Command"
+                    Command = "$Command"
                     CommandType = "powershell"
+                    PreserveWorkingDir = $true
+                    WorkingDirectory = $WorkingDirectory
                 }
             } else {
                 return @{
                     Command = $Command
                     CommandType = "powershell"
+                    PreserveWorkingDir = $false
                 }
             }
         }
@@ -164,45 +169,62 @@ function Invoke-CommandWithTimeout {
         [string]$Command,
         [string]$CommandType,
         [int]$TimeoutSeconds,
-        [string]$Icon
+        [string]$Icon,
+        [bool]$PreserveWorkingDir = $false,
+        [string]$WorkingDirectory = ""
     )
     
-    if ($TimeoutSeconds -gt 0) {
-        if ($Verbose) {
-            Write-Log ("{0}Executing {1} command with timeout: {2}" -f $Icon, $CommandType.ToUpper(), $Command) "DEBUG"
-        }
-        
-        if ($CommandType -eq "cmd") {
-            $job = Start-Job -ScriptBlock { param($cmd) cmd /c $cmd } -ArgumentList $Command
+    # Save current location if we need to preserve it
+    $originalLocation = $null
+    if ($PreserveWorkingDir -and $WorkingDirectory) {
+        $originalLocation = Get-Location
+        Set-Location -Path $WorkingDirectory
+    }
+    
+    try {
+        if ($TimeoutSeconds -gt 0) {
+            if ($Verbose) {
+                Write-Log ("{0}Executing {1} command with timeout: {2}" -f $Icon, $CommandType.ToUpper(), $Command) "DEBUG"
+            }
+            
+            if ($CommandType -eq "cmd") {
+                $job = Start-Job -ScriptBlock { param($cmd) cmd /c $cmd } -ArgumentList $Command
+            } else {
+                $job = Start-Job -ScriptBlock { param($cmd) Invoke-Expression $cmd } -ArgumentList $Command
+            }
+            
+            $completed = Wait-Job $job -Timeout $TimeoutSeconds
+            
+            if ($completed) {
+                $output = Receive-Job $job
+                $success = $job.State -eq "Completed"
+                Remove-Job $job
+                return @{ Success = $success; Output = $output }
+            } else {
+                Stop-Job $job
+                Remove-Job $job
+                return @{ Success = $false; Output = "Timeout after $TimeoutSeconds seconds" }
+            }
         } else {
-            $job = Start-Job -ScriptBlock { param($cmd) Invoke-Expression $cmd } -ArgumentList $Command
-        }
-        
-        $completed = Wait-Job $job -Timeout $TimeoutSeconds
-        
-        if ($completed) {
-            $output = Receive-Job $job
-            $success = $job.State -eq "Completed"
-            Remove-Job $job
+            if ($Verbose) {
+                Write-Log ("{0}Executing {1} command: {2}" -f $Icon, $CommandType.ToUpper(), $Command) "DEBUG"
+            }
+            
+            if ($CommandType -eq "cmd") {
+                $output = cmd /c $Command 2>&1
+                $success = $LASTEXITCODE -eq 0
+            } else {
+                $output = Invoke-Expression $Command 2>&1
+                $success = $LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq $null
+            }
             return @{ Success = $success; Output = $output }
-        } else {
-            Stop-Job $job
-            Remove-Job $job
-            return @{ Success = $false; Output = "Timeout after $TimeoutSeconds seconds" }
         }
-    } else {
-        if ($Verbose) {
-            Write-Log ("{0}Executing {1} command: {2}" -f $Icon, $CommandType.ToUpper(), $Command) "DEBUG"
+    }
+    finally {
+        # Always restore the original location if we changed it
+        if ($originalLocation) {
+            Set-Location -Path $originalLocation
         }
-        
-        if ($CommandType -eq "cmd") {
-            $output = cmd /c $Command 2>&1
-            $success = $LASTEXITCODE -eq 0
-        } else {
-            $output = Invoke-Expression $Command 2>&1
-            $success = $LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq $null
-        }
-        return @{ Success = $success; Output = $output }
     }
 }
 
@@ -216,7 +238,8 @@ function Invoke-Command {
         [string]$WorkingDirectory = "",
         [int]$TimeoutSeconds = 0
     )
-      # Transform command based on launch method
+    
+    # Transform command based on launch method
     $transformedCommand = Transform-CommandForLaunch -Command $Command -LaunchVia $LaunchVia -WorkingDirectory $WorkingDirectory
     
     $timeoutText = if ($TimeoutSeconds -gt 0) { " (timeout: ${TimeoutSeconds}s)" } else { "" }
@@ -225,7 +248,12 @@ function Invoke-Command {
     try {
         # Execute command
         $icon = Get-StateIcon $StateName
-        $result = Invoke-CommandWithTimeout -Command $transformedCommand.Command -CommandType $transformedCommand.CommandType -TimeoutSeconds $TimeoutSeconds -Icon $icon
+        $result = Invoke-CommandWithTimeout -Command $transformedCommand.Command `
+                                           -CommandType $transformedCommand.CommandType `
+                                           -TimeoutSeconds $TimeoutSeconds `
+                                           -Icon $icon `
+                                           -PreserveWorkingDir $transformedCommand.PreserveWorkingDir `
+                                           -WorkingDirectory $(if ($transformedCommand.PreserveWorkingDir) { $transformedCommand.WorkingDirectory } else { "" })
         
         # Check for success and error patterns in output
         if ($result.Success -and $result.Output) {
