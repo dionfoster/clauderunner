@@ -2,13 +2,10 @@
 states:
   # Docker initialization state that ensures Docker Desktop is running
   dockerStartup:
-    readiness:
-      # Check if already running
+    readiness:      # Check if already running
       checkCommand: docker info
       # Command to wait for when determining if startup is complete
       waitCommand: docker info
-      # Custom error pattern to detect specific errors (regex)
-      errorPattern: "(?i)cannot connect|is not running"
       # Polling configuration
       maxRetries: 15
       retryInterval: 4

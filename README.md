@@ -42,7 +42,6 @@ states:
 |--------|-------------|
 | `readiness.checkCommand` | Command to execute to check if state is already ready |
 | `readiness.waitCommand` | Command to poll to determine when state is fully ready |
-| `readiness.errorPattern` | Custom regex pattern to detect errors in command output |
 | `readiness.maxRetries` | Maximum number of retry attempts for wait polling (default: 10) |
 | `readiness.retryInterval` | Time in seconds between retry attempts (default: 3) |
 | `readiness.successfulRetries` | Number of consecutive successful checks required (default: 1) |
@@ -198,14 +197,13 @@ This example:
 3. Runs `npm run dev` in a new window
 4. Displays "Starting Identity SPA" in the logs
 
-### Docker Services with Custom Error Detection and Polling
+### Docker Services with Polling Configuration
 
 ```yaml
 dockerStartup:
   readiness:
     checkCommand: docker info
     waitCommand: docker info
-    errorPattern: "(?i)cannot connect|is not running"
     maxRetries: 15
     retryInterval: 4
     successfulRetries: 2
@@ -221,46 +219,10 @@ This example:
 1. Checks if Docker is running with `docker info`
 2. If not, launches Docker Desktop application
 3. Waits for Docker to be ready by polling `docker info`
-4. Uses a custom error pattern to detect specific Docker-related errors
-5. Configures polling behavior with custom retry settings:
+4. Configures polling behavior with custom retry settings:
    - Up to 15 retry attempts
-   - 4 seconds between each attempt
-   - Requires 2 consecutive successful checks
+   - 4 seconds between each attempt   - Requires 2 consecutive successful checks
    - Will wait up to 60 seconds total
-
-## Custom Error Detection
-
-The task runner supports custom error pattern detection through regex patterns. This allows you to specify exactly what should be considered an error in your command output.
-
-### How Error Detection Works
-
-1. By default, the runner looks for common error terms like "error", "failed", "not found", etc.
-
-2. With custom error patterns, you can:
-   - Target specific error messages relevant to your tools
-   - Ignore false positives from standard error detection
-   - Create more precise readiness checks
-
-### Example
-
-```yaml
-apiReady:
-  readiness:
-    checkCommand: dotnet build
-    errorPattern: "(?i)build failed|Could not find a part of the path|CS[0-9]{4}"
-```
-
-In this example, the error pattern will detect:
-- "build failed" (case insensitive)
-- "Could not find a part of the path" 
-- Any C# compiler error codes (like CS0001)
-
-### When to Use Custom Error Patterns
-
-Use custom error patterns when:
-- Your tools use unique error formats
-- The default error detection is too broad
-- You need to check for specific error conditions
 
 ## Usage
 
@@ -296,7 +258,7 @@ Enable detailed logging:
 
 3. **Action Execution**: Commands are executed sequentially within each state.
 
-4. **Wait Polling**: After actions complete, the runner can poll a command to ensure the state is fully ready with custom error detection and retry behavior.
+4. **Wait Polling**: After actions complete, the runner can poll a command to ensure the state is fully ready with custom retry behavior.
 
 5. **Status Tracking**: The runner keeps track of processed states to avoid duplication and detect circular dependencies.
 

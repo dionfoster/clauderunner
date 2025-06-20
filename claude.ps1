@@ -85,14 +85,8 @@ function Load-Configuration {
 
 function Test-OutputForErrors {
     param(
-        [string]$OutputString,
-        [string]$CustomErrorPattern = ""
+        [string]$OutputString
     )
-    
-    # If a custom error pattern is provided, use it first
-    if ($CustomErrorPattern -and $OutputString -match $CustomErrorPattern) {
-        return $true
-    }
     
     $errorPatterns = @(
         "error", "not found", "unable", "fail", "failed",
@@ -296,15 +290,13 @@ function Invoke-Command {
     }
 }
 
-function Test-ContinueAfter {
-    param(
+function Test-ContinueAfter {    param(
         [string]$Command,
         [string]$StateName,
         [int]$MaxRetries = 10,
         [int]$RetryInterval = 3,
         [int]$SuccessfulRetries = 1,
-        [int]$MaxTimeSeconds = 30,
-        [string]$ErrorPattern = ""
+        [int]$MaxTimeSeconds = 30
     )
     
     $attempt = 0
@@ -326,8 +318,7 @@ function Test-ContinueAfter {
             
             if ($success) {
                 $outputString = $output | Out-String
-                
-                if (-not (Test-OutputForErrors -OutputString $outputString -CustomErrorPattern $ErrorPattern)) {
+                  if (-not (Test-OutputForErrors -OutputString $outputString)) {
                     $successCount++
                     Write-StateLog $StateName "✓ Check passed ($successCount/$SuccessfulRetries successful checks)" "SUCCESS"
                     
@@ -403,17 +394,10 @@ function Test-PreCheck {
         if ($completed) {
             $result = Receive-Job $job
             Remove-Job $job
-            
-            $success = $result.ExitCode -eq 0
+              $success = $result.ExitCode -eq 0
             $outputString = $result.Output | Out-String
             
-            # Get custom error pattern if available
-            $errorPattern = ""
-            if ($StateConfig.readiness -and $StateConfig.readiness.errorPattern) {
-                $errorPattern = $StateConfig.readiness.errorPattern
-            }
-            
-            if ($success -and -not (Test-OutputForErrors -OutputString $outputString -CustomErrorPattern $errorPattern)) {
+            if ($success -and -not (Test-OutputForErrors -OutputString $outputString)) {
                 Write-StateLog $StateName "✓ State $StateName is already ready, skipping actions" "SUCCESS"
                 if ($Verbose) {
                     $lines = ($outputString -split "`n").Count
@@ -571,22 +555,19 @@ function Invoke-State {
     # Handle wait polling if defined
     if ($stateConfig.readiness -and $stateConfig.readiness.waitCommand) {
         $command = $stateConfig.readiness.waitCommand
-        
-        # Use smart defaults for polling
+          # Use smart defaults for polling
         $maxRetries = 10
         $retryInterval = 3  
         $successfulRetries = 1
         $maxTimeSeconds = 30
-        $errorPattern = ""
         
         # Override with custom values if provided
         if ($stateConfig.readiness.maxRetries) { $maxRetries = $stateConfig.readiness.maxRetries }
         if ($stateConfig.readiness.retryInterval) { $retryInterval = $stateConfig.readiness.retryInterval }
         if ($stateConfig.readiness.successfulRetries) { $successfulRetries = $stateConfig.readiness.successfulRetries }
         if ($stateConfig.readiness.maxTimeSeconds) { $maxTimeSeconds = $stateConfig.readiness.maxTimeSeconds }
-        if ($stateConfig.readiness.errorPattern) { $errorPattern = $stateConfig.readiness.errorPattern }
         
-        if (-not (Test-ContinueAfter -Command $command -StateName $StateName -MaxRetries $maxRetries -RetryInterval $retryInterval -SuccessfulRetries $successfulRetries -MaxTimeSeconds $maxTimeSeconds -ErrorPattern $errorPattern)) {
+        if (-not (Test-ContinueAfter -Command $command -StateName $StateName -MaxRetries $maxRetries -RetryInterval $retryInterval -SuccessfulRetries $successfulRetries -MaxTimeSeconds $maxTimeSeconds)) {
             Write-StateLog $StateName "State $StateName failed to become ready" "ERROR"
             return $false
         }
