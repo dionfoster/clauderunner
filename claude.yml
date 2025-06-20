@@ -23,7 +23,9 @@ states:
         command: docker start postgres
       - type: command
         command: docker start rabbitmq  # Backend API state that starts the .NET Identity API
+
   apiReady:
+    needs: [dockerReady]
     readiness:
       checkEndpoint: "https://localhost:5001/healthcheck"
       waitEndpoint: "https://localhost:5001/healthcheck"
@@ -39,11 +41,12 @@ states:
 
   # Frontend state that prepares and starts the SPA
   nodeReady:
-    needs: [apiReady]
-    
     actions:
       - type: command
         command: Set-NodeVersion -Version v22.16.0
+
+      - type: command
+        command: node --version        
       
       - type: command
         command: npm install

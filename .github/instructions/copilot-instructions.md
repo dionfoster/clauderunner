@@ -36,6 +36,7 @@ applyTo: '**'
 - Readiness checks should be reliable and timeout appropriately
 - Provide helpful, actionable error messages
 - Launch methods should be appropriate to the application type
+- It is important that tasks are either explicitly retried or fail gracefully, there are specific points in which the task runner should fail, and continue, do not invent ways to ignore errors and continue
 
 ## Implementation Patterns
 - Prefer explicit return values over relying on $LASTEXITCODE
@@ -49,3 +50,4 @@ applyTo: '**'
 - Include examples in README for common usage patterns
 - Document any required dependencies or prerequisites
 - Explain the reasoning behind complex logic
+

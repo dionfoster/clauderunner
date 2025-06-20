@@ -2,6 +2,64 @@
 
 <#
 .SYNOPSIS
+Command Execution Module for Claude Task Runner
+
+.DESCRIPTION
+This module provides functions for executing commands in various ways with proper error handling.
+
+.NOTES
+To add support for additional command aliases, extend the $script:CommandAliases hashtable at the top of this file.
+Example:
+$script:CommandAliases = @{
+    "npm" = {param($cmdArgs) & npm $cmdArgs}
+    "newcommand" = {param($cmdArgs) & newcommand $cmdArgs}
+}
+#>
+
+# Script-level command alias mapping
+$script:CommandAliases = @{
+    "npm" = "npm"
+    "yarn" = "yarn"
+    "pnpm" = "pnpm"
+    "node" = "node"
+    "Set-NodeVersion" = "Set-NodeVersion"
+}
+
+<#
+.SYNOPSIS
+Resolves command aliases to proper executable commands.
+
+.DESCRIPTION
+Takes a command string and checks if the first word matches a known command alias.
+If a match is found, it transforms the command to use the appropriate execution method.
+
+.PARAMETER Command
+The command string to resolve.
+
+.OUTPUTS
+Returns the resolved command string.
+#>
+function Resolve-CommandAlias {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Command
+    )
+    
+    # Normal command alias handling
+    $cmdParts = $Command -split ' ', 2
+    $cmdName = $cmdParts[0]
+    $cmdArgs = if ($cmdParts.Length -gt 1) { $cmdParts[1] } else { "" }
+    
+    if ($script:CommandAliases.ContainsKey($cmdName)) {
+        # Just use the direct command - simpler and more reliable
+        return "$($script:CommandAliases[$cmdName]) $cmdArgs"
+    }
+    
+    return $Command
+}
+
+<#
+.SYNOPSIS
 Tests if a command output string contains error patterns.
 
 .DESCRIPTION
@@ -144,9 +202,18 @@ function ConvertTo-LaunchCommand {
                 CommandType = "cmd"
                 PreserveWorkingDir = $false
             }
-        }
-        "newWindow" {
+        }        "newWindow" {
             $executable, $arguments = Get-ExecutableAndArgs -Command $Command
+            
+            # Special handling for npm/node commands when launched in a new window
+            if ($executable -eq "npm" -or $executable -eq "node") {
+                return @{
+                    Command = "Start-Process pwsh -ArgumentList '-NoExit','-Command',`"cd '$WorkingDirectory'; $Command`"" 
+                    CommandType = "powershell"
+                    PreserveWorkingDir = $false
+                }
+            }
+            
             return @{
                 Command = Build-StartProcessCommand -Executable $executable -Arguments $arguments -WorkingDirectory $WorkingDirectory -WindowStyle "Normal"
                 CommandType = "powershell"
@@ -256,9 +323,7 @@ function Invoke-CommandWithTimeout {
         } else {
             if ($global:Verbose) {
                 Write-Log ("{0}Executing {1} command: {2}" -f $Icon, $CommandType.ToUpper(), $Command) "DEBUG"
-            }
-            
-            if ($CommandType -eq "cmd") {
+            }            if ($CommandType -eq "cmd") {
                 $output = cmd /c $Command 2>&1
                 $success = $LASTEXITCODE -eq 0
             } else {
@@ -332,8 +397,12 @@ function Invoke-Command {
         [Parameter(Mandatory=$false)]
         [int]$TimeoutSeconds = 0
     )
-      # Transform command based on launch method
-    $transformedCommand = ConvertTo-LaunchCommand -Command $Command -LaunchVia $LaunchVia -WorkingDirectory $WorkingDirectory
+    
+    # Resolve any command aliases
+    $resolvedCommand = Resolve-CommandAlias -Command $Command
+    
+    # Transform command based on launch method
+    $transformedCommand = ConvertTo-LaunchCommand -Command $resolvedCommand -LaunchVia $LaunchVia -WorkingDirectory $WorkingDirectory
     
     $timeoutText = if ($TimeoutSeconds -gt 0) { " (timeout: ${TimeoutSeconds}s)" } else { "" }
     Write-StateLog $StateName "$Description`: $Command$timeoutText" "INFO"
@@ -382,4 +451,4 @@ function Invoke-Command {
 }
 
 # Export the functions
-Export-ModuleMember -Function Test-OutputForErrors, Get-ExecutableAndArgs, Build-StartProcessCommand, ConvertTo-LaunchCommand, Invoke-CommandWithTimeout, Invoke-Command
+Export-ModuleMember -Function Test-OutputForErrors, Get-ExecutableAndArgs, Build-StartProcessCommand, ConvertTo-LaunchCommand, Invoke-CommandWithTimeout, Invoke-Command, Resolve-CommandAlias
