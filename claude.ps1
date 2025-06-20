@@ -84,7 +84,15 @@ function Load-Configuration {
 }
 
 function Test-OutputForErrors {
-    param([string]$OutputString)
+    param(
+        [string]$OutputString,
+        [string]$CustomErrorPattern = ""
+    )
+    
+    # If a custom error pattern is provided, use it first
+    if ($CustomErrorPattern -and $OutputString -match $CustomErrorPattern) {
+        return $true
+    }
     
     $errorPatterns = @(
         "error", "not found", "unable", "fail", "failed",
@@ -295,7 +303,8 @@ function Test-ContinueAfter {
         [int]$MaxRetries = 10,
         [int]$RetryInterval = 3,
         [int]$SuccessfulRetries = 1,
-        [int]$MaxTimeSeconds = 30
+        [int]$MaxTimeSeconds = 30,
+        [string]$ErrorPattern = ""
     )
     
     $attempt = 0
@@ -318,7 +327,7 @@ function Test-ContinueAfter {
             if ($success) {
                 $outputString = $output | Out-String
                 
-                if (-not (Test-OutputForErrors -OutputString $outputString)) {
+                if (-not (Test-OutputForErrors -OutputString $outputString -CustomErrorPattern $ErrorPattern)) {
                     $successCount++
                     Write-StateLog $StateName "✓ Check passed ($successCount/$SuccessfulRetries successful checks)" "SUCCESS"
                     
@@ -371,7 +380,8 @@ function Test-ContinueAfter {
 function Test-PreCheck {
     param(
         [string]$CheckCommand,
-        [string]$StateName
+        [string]$StateName,
+        [hashtable]$StateConfig
     )
     
     Write-StateLog $StateName "Checking if $StateName is already ready..." "INFO"
@@ -397,7 +407,13 @@ function Test-PreCheck {
             $success = $result.ExitCode -eq 0
             $outputString = $result.Output | Out-String
             
-            if ($success -and -not (Test-OutputForErrors -OutputString $outputString)) {
+            # Get custom error pattern if available
+            $errorPattern = ""
+            if ($StateConfig.readiness -and $StateConfig.readiness.errorPattern) {
+                $errorPattern = $StateConfig.readiness.errorPattern
+            }
+            
+            if ($success -and -not (Test-OutputForErrors -OutputString $outputString -CustomErrorPattern $errorPattern)) {
                 Write-StateLog $StateName "✓ State $StateName is already ready, skipping actions" "SUCCESS"
                 if ($Verbose) {
                     $lines = ($outputString -split "`n").Count
@@ -435,21 +451,27 @@ function Test-PreCheck {
 function Test-StateConfiguration {
     param([hashtable]$StateConfig, [string]$StateName)
     
-    if (-not $StateConfig.run -and -not $StateConfig.waitFor) {
-        throw "State '$StateName' has no actions or polling defined"
+    if (-not $StateConfig.actions -and -not ($StateConfig.readiness -and $StateConfig.readiness.waitCommand)) {
+        throw "State '$StateName' has no actions or wait command defined"
     }
     
-    if ($StateConfig.run) {
-        foreach ($action in $StateConfig.run) {
+    if ($StateConfig.actions) {
+        foreach ($action in $StateConfig.actions) {
             if ($action -is [string]) { continue }
-            if (-not ($action.command -or $action.app)) {
-                throw "Invalid action in state '$StateName': must have 'command' or 'app'"
+            if (-not ($action.type -eq "command" -or $action.type -eq "application")) {
+                throw "Invalid action in state '$StateName': must have type 'command' or 'application'"
+            }
+            if ($action.type -eq "command" -and -not $action.command) {
+                throw "Invalid command action in state '$StateName': missing 'command' property"
+            }
+            if ($action.type -eq "application" -and -not $action.path) {
+                throw "Invalid application action in state '$StateName': missing 'path' property"
             }
         }
     }
 }
 
-function Run-State {
+function Invoke-State {
     param(
         [string]$StateName,
         [hashtable]$Config,
@@ -488,7 +510,7 @@ function Run-State {
         $depList = $stateConfig.needs -join ', '
         Write-StateLog $StateName "Resolving dependencies for $StateName`: $depList" "INFO"
         foreach ($dependency in $stateConfig.needs) {
-            if (-not (Run-State -StateName $dependency -Config $Config -ProcessedStates $ProcessedStates)) {
+            if (-not (Invoke-State -StateName $dependency -Config $Config -ProcessedStates $ProcessedStates)) {
                 Write-StateLog $StateName "Dependency $dependency failed for state $StateName" "ERROR"
                 return $false
             }
@@ -496,18 +518,18 @@ function Run-State {
     }
     
     # Perform pre-check if defined
-    if ($stateConfig.check) {
-        if (Test-PreCheck -CheckCommand $stateConfig.check -StateName $StateName) {
+    if ($stateConfig.readiness -and $stateConfig.readiness.checkCommand) {
+        if (Test-PreCheck -CheckCommand $stateConfig.readiness.checkCommand -StateName $StateName -StateConfig $stateConfig) {
             $ProcessedStates.Add($StateName) | Out-Null
             return $true
         }
     }
     
-    # Execute run actions
-    if ($stateConfig.run) {
-        Write-StateLog $StateName "Executing run actions for $StateName" "INFO"
+    # Execute actions
+    if ($stateConfig.actions) {
+        Write-StateLog $StateName "Executing actions for $StateName" "INFO"
         
-        foreach ($action in $stateConfig.run) {
+        foreach ($action in $stateConfig.actions) {
             $params = @{
                 Command = ""
                 Description = "Execute command"
@@ -521,23 +543,23 @@ function Run-State {
             if ($action -is [string]) {
                 # Simple string command - default to PowerShell
                 $params.Command = $action
-            } elseif ($action.command) {
-                # Generic command - default to PowerShell
+            } elseif ($action.type -eq "command") {
+                # Command type action
                 $params.Command = $action.command
-            } elseif ($action.app) {
-                # App launch - always use windowsApp
-                $params.Command = $action.app
+            } elseif ($action.type -eq "application") {
+                # Application launch type action
+                $params.Command = $action.path
                 $params.LaunchVia = "windowsApp"
             } else {
                 Write-StateLog $StateName "Invalid action format in state $StateName" "ERROR"
                 continue
             }
             
-            # Extract optional properties (new names)
+            # Extract optional properties
             if ($action.timeout) { $params.TimeoutSeconds = $action.timeout }
-            if ($action.desc) { $params.Description = $action.desc }
-            if ($action.dir) { $params.WorkingDirectory = $action.dir }
-            if ($action.window) { $params.LaunchVia = "newWindow" }
+            if ($action.description) { $params.Description = $action.description }
+            if ($action.workingDirectory) { $params.WorkingDirectory = $action.workingDirectory }
+            if ($action.newWindow) { $params.LaunchVia = "newWindow" }
             
             if (-not (Invoke-Command @params)) {
                 Write-StateLog $StateName "Action failed in state $StateName" "ERROR"
@@ -545,17 +567,26 @@ function Run-State {
             }
         }
     }
-      # Handle wait polling if defined (simplified)
-    if ($stateConfig.waitFor) {
-        $command = $stateConfig.waitFor
+    
+    # Handle wait polling if defined
+    if ($stateConfig.readiness -and $stateConfig.readiness.waitCommand) {
+        $command = $stateConfig.readiness.waitCommand
         
         # Use smart defaults for polling
         $maxRetries = 10
         $retryInterval = 3  
         $successfulRetries = 1
         $maxTimeSeconds = 30
+        $errorPattern = ""
         
-        if (-not (Test-ContinueAfter -Command $command -StateName $StateName -MaxRetries $maxRetries -RetryInterval $retryInterval -SuccessfulRetries $successfulRetries -MaxTimeSeconds $maxTimeSeconds)) {
+        # Override with custom values if provided
+        if ($stateConfig.readiness.maxRetries) { $maxRetries = $stateConfig.readiness.maxRetries }
+        if ($stateConfig.readiness.retryInterval) { $retryInterval = $stateConfig.readiness.retryInterval }
+        if ($stateConfig.readiness.successfulRetries) { $successfulRetries = $stateConfig.readiness.successfulRetries }
+        if ($stateConfig.readiness.maxTimeSeconds) { $maxTimeSeconds = $stateConfig.readiness.maxTimeSeconds }
+        if ($stateConfig.readiness.errorPattern) { $errorPattern = $stateConfig.readiness.errorPattern }
+        
+        if (-not (Test-ContinueAfter -Command $command -StateName $StateName -MaxRetries $maxRetries -RetryInterval $retryInterval -SuccessfulRetries $successfulRetries -MaxTimeSeconds $maxTimeSeconds -ErrorPattern $errorPattern)) {
             Write-StateLog $StateName "State $StateName failed to become ready" "ERROR"
             return $false
         }
@@ -578,7 +609,7 @@ try {
     # Track processed states for this run only
     $processedStates = New-Object System.Collections.Generic.HashSet[string]
     
-    $success = Run-State -StateName $Target -Config $config -ProcessedStates $processedStates
+    $success = Invoke-State -StateName $Target -Config $config -ProcessedStates $processedStates
     
     # Show summary of what was processed
     Write-Log "=== Run Summary ===" "INFO"

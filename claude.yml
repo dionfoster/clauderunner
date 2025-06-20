@@ -1,34 +1,62 @@
-# claude.yml - Simplified launch method specification
+# claude.yml - Task orchestration configuration
 states:
+  # Docker initialization state that ensures Docker Desktop is running
   dockerStartup:
-    check: docker info
-    run:
-      - app: 'C:\Program Files\Docker\Docker\Docker Desktop.exe'
-        desc: "Starting Docker Desktop"
-    waitFor: docker info
+    readiness:
+      # Check if already running
+      checkCommand: docker info
+      # Command to wait for when determining if startup is complete
+      waitCommand: docker info
+      # Custom error pattern to detect specific errors (regex)
+      errorPattern: "(?i)cannot connect|is not running"
+      # Polling configuration
+      maxRetries: 15
+      retryInterval: 4
+      successfulRetries: 2
+      maxTimeSeconds: 60
+    
+    actions:
+      - type: application
+        path: 'C:\Program Files\Docker\Docker\Docker Desktop.exe'
+        description: "Starting Docker Desktop"
 
+  # Container startup state that ensures required containers are running
   dockerReady:
     needs: [dockerStartup]
-    check: docker info
-    run:
-      - docker start postgres
-      - docker start rabbitmq
+    readiness:
+      checkCommand: docker info
+    
+    actions:
+      - type: command
+        command: docker start postgres
+      - type: command
+        command: docker start rabbitmq
 
+  # Backend API state that starts the .NET Identity API
   apiReady:
     needs: [dockerReady]
-    run:
-      - command: dotnet run
-        dir: "C:\\github\\Identity.Api\\src\\Identity.Api"
-        window: true
-        desc: "Starting Identity API"
+    
+    actions:
+      - type: command
+        command: dotnet run
+        workingDirectory: "C:\\github\\Identity.Api\\src\\Identity.Api"
+        newWindow: true
+        description: "Starting Identity API"
 
+  # Frontend state that prepares and starts the SPA
   nodeReady:
     needs: [apiReady]
-    run:
-      - Set-NodeVersion -Version v22.16.0
-      - command: npm install
-        dir: "C:\\github\\Identity.Spa"
-      - command: npm run dev
-        dir: "C:\\github\\Identity.Spa"
-        window: true
-        desc: "Starting Identity SPA"
+    
+    actions:
+      - type: command
+        command: Set-NodeVersion -Version v22.16.0
+      
+      - type: command
+        command: npm install
+        workingDirectory: "C:\\github\\Identity.Spa"
+      
+      - type: command
+        command: npm run dev
+        workingDirectory: "C:\\github\\Identity.Spa"
+        newWindow: true
+        description: "Starting Identity SPA"
