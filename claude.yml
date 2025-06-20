@@ -22,13 +22,16 @@ states:
       - type: command
         command: docker start postgres
       - type: command
-        command: docker start rabbitmq
-
-  # Backend API state that starts the .NET Identity API
+        command: docker start rabbitmq  # Backend API state that starts the .NET Identity API
   apiReady:
-    needs: [dockerReady]
     readiness:
-      checkCommand: Invoke-WebRequest -Uri "https://localhost:5001/healthcheck" -UseBasicParsing -ErrorAction SilentlyContinue
+      checkCommand: |
+        try { 
+          $webRequest = Invoke-WebRequest -Uri "https://localhost:5001/healthcheck" -UseBasicParsing -ErrorAction Stop
+          $true  # Return success
+        } catch { 
+          $false  # Return failure
+        }
       waitCommand: Invoke-WebRequest -Uri "https://localhost:5001/healthcheck" -UseBasicParsing
     
     actions:

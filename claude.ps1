@@ -376,49 +376,42 @@ function Test-PreCheck {
     )
     
     Write-StateLog $StateName "Checking if $StateName is already ready..." "INFO"
-    
-    try {
+      try {
         if ($Verbose) {
             Write-StateLog $StateName "Check command: $CheckCommand" "DEBUG"
         }
         
-        # Use job with proper exit code checking
-        $job = Start-Job -ScriptBlock { 
-            param($cmd) 
-            $output = Invoke-Expression $cmd 2>&1
-            return @{ Output = $output; ExitCode = $LASTEXITCODE }
-        } -ArgumentList $CheckCommand
+        # Use try-catch instead of job for better exit code handling
+        $output = $null
+        $exitCode = $null
         
-        $completed = Wait-Job $job -Timeout 5  # 5 second timeout for checks
+        try {
+            # Execute command directly in the current process for better exit code handling
+            $output = Invoke-Expression $CheckCommand 2>&1
+            $exitCode = if ($LASTEXITCODE -ne $null) { $LASTEXITCODE } else { 0 }
+        }
+        catch {
+            $output = $_.Exception.Message
+            $exitCode = 1
+        }
         
-        if ($completed) {
-            $result = Receive-Job $job
-            Remove-Job $job
-              $success = $result.ExitCode -eq 0
-            $outputString = $result.Output | Out-String
-            
-            if ($success -and -not (Test-OutputForErrors -OutputString $outputString)) {
-                Write-StateLog $StateName "✓ State $StateName is already ready, skipping actions" "SUCCESS"
-                if ($Verbose) {
-                    $lines = ($outputString -split "`n").Count
-                    Write-StateLog $StateName "Check returned $lines lines of output (success)" "DEBUG"
-                }
-                return $true
-            } else {
-                if ($Verbose) {
-                    if (-not $success) {
-                        Write-StateLog $StateName "Check failed (Exit Code: $($result.ExitCode))" "DEBUG"
-                    } else {
-                        Write-StateLog $StateName "Check completed but output contains errors" "DEBUG"
-                    }
-                }
-            }
-        } else {
-            # Timeout occurred
-            Stop-Job $job
-            Remove-Job $job
+        $success = $exitCode -eq 0
+        $outputString = $output | Out-String
+        
+        if ($success -and -not (Test-OutputForErrors -OutputString $outputString)) {
+            Write-StateLog $StateName "✓ State $StateName is already ready, skipping actions" "SUCCESS"
             if ($Verbose) {
-                Write-StateLog $StateName "Check timed out after 5 seconds" "DEBUG"
+                $lines = ($outputString -split "`n").Count
+                Write-StateLog $StateName "Check returned $lines lines of output (success)" "DEBUG"
+            }
+            return $true
+        } else {
+            if ($Verbose) {
+                if (-not $success) {
+                    Write-StateLog $StateName "Check failed (Exit Code: $exitCode)" "DEBUG"
+                } else {
+                    Write-StateLog $StateName "Check completed but output contains errors" "DEBUG"
+                }
             }
         }
     }
