@@ -6,11 +6,6 @@ states:
       checkCommand: docker info
       # Command to wait for when determining if startup is complete
       waitCommand: docker info
-      # Polling configuration
-      maxRetries: 15
-      retryInterval: 4
-      successfulRetries: 2
-      maxTimeSeconds: 60
     
     actions:
       - type: application
@@ -32,6 +27,9 @@ states:
   # Backend API state that starts the .NET Identity API
   apiReady:
     needs: [dockerReady]
+    readiness:
+      checkCommand: Invoke-WebRequest -Uri "https://localhost:5001/healthcheck" -UseBasicParsing -ErrorAction SilentlyContinue
+      waitCommand: Invoke-WebRequest -Uri "https://localhost:5001/healthcheck" -UseBasicParsing
     
     actions:
       - type: command
