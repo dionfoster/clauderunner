@@ -56,7 +56,7 @@ Writes a log message with timestamp and appropriate emoji to both the console an
 The message to be logged.
 
 .PARAMETER Level
-The log level (INFO, SUCCESS, WARN, ERROR, DEBUG). Default is INFO.
+The log level (INFO, SUCCESS, WARN, ERROR, DEBUG, SYSTEM). Default is INFO.
 #>
 function Write-Log {
     param(
@@ -64,7 +64,7 @@ function Write-Log {
         [string]$Message, 
         
         [Parameter(Mandatory=$false)]
-        [ValidateSet("INFO", "SUCCESS", "WARN", "ERROR", "DEBUG")]
+        [ValidateSet("INFO", "SUCCESS", "WARN", "ERROR", "DEBUG", "SYSTEM")]
         [string]$Level = "INFO"
     )
     
@@ -78,21 +78,38 @@ function Write-Log {
         "WARN" { $color = "Yellow"; $emoji = "⚠️ " }
         "ERROR" { $color = "Red"; $emoji = "❌ " }
         "DEBUG" { $color = "Cyan"; $emoji = "🔍 " }
-    }
-      # In standard mode, use original format
-    if ($script:LoggingMode -eq "Standard") {
+    }    if ($script:LoggingMode -eq "Standard") {        # Standard mode - include timestamp
         $fullMessage = "[$timestamp] [$Level] $emoji$Message"
         Write-Host $fullMessage -ForegroundColor $color
+        
+        # Log to file with timestamp
+        $logMessage = "[$timestamp] [$Level] $emoji$Message"
+        $logMessage | Out-File -FilePath $script:LogPath -Append -Encoding UTF8
     }
-    # In state machine mode, use simplified format for non-state logs
     else {
-        $fullMessage = "[$Level] $emoji$Message"
-        Write-Host $fullMessage -ForegroundColor $color
+        # State machine mode - no timestamp in console, simpler format
+        if ($Level -eq "SYSTEM") {
+            # State machine headers are printed as-is
+            Write-Host $Message -ForegroundColor $color
+            
+            # Log with timestamp to file
+            $logMessage = "[$timestamp] [INFO] $Message"
+            $logMessage | Out-File -FilePath $script:LogPath -Append -Encoding UTF8
+        }
+        elseif ($Level -in @("INFO", "SUCCESS", "ERROR")) {
+            # For state command execution messages, suppress timestamps
+            if ($Message -match "Execute command:|completed successfully|command failed") {
+                return
+            }
+            
+            # For other main status messages, use state machine format
+            Write-Host "[$Level] $emoji$Message" -ForegroundColor $color
+            
+            # Log with timestamp to file
+            $logMessage = "[$timestamp] [$Level] $emoji$Message"
+            $logMessage | Out-File -FilePath $script:LogPath -Append -Encoding UTF8
+        }
     }
-    
-    # Always log to file in the same format
-    $logMessage = "[$timestamp] [$Level] $emoji$Message"
-    $logMessage | Out-File -FilePath $script:LogPath -Append -Encoding UTF8
 }
 
 <#
@@ -179,13 +196,11 @@ Initializes the state machine visualization and writes the header.
 #>
 function Start-StateTransitions {    if ($script:LoggingMode -ne "StateMachine") {
         return
-    }
-    
-    if (-not $script:StateTransitionStarted) {
+    }    if (-not $script:StateTransitionStarted) {
         $script:TotalStartTime = Get-Date
         
-        Write-Host ""
-        Write-Host "STATE TRANSITIONS:" -ForegroundColor Cyan
+        Write-Host "`nSTATE TRANSITIONS:" -ForegroundColor Cyan
+        Write-Host "" # Add an extra line break
         $script:StateTransitionStarted = $true
         
         # Log to file
@@ -630,15 +645,13 @@ function Write-StateSummary {
     $failedStates = $script:ProcessedStates.Keys | Where-Object { $script:ProcessedStates[$_]["Status"] -eq "Failed" }
     
     # Define standard order for states (to match template format)
-    $stateOrder = @("dockerStartup", "dockerReady", "apiReady", "nodeReady")
-    
-    # Sort successful states based on standard order if they exist in the order array
+    $stateOrder = @("dockerStartup", "dockerReady", "apiReady", "nodeReady")    # Sort successful states based on standard order if they exist in the order array
     $sortedSuccessfulStates = $successfulStates | Sort-Object { 
         $index = [array]::IndexOf($stateOrder, $_)
         if ($index -eq -1) { [int]::MaxValue } else { $index }
     }
     
-    Write-Host "SUMMARY:" -ForegroundColor Cyan
+    Write-Host "`nSUMMARY:"
     
     if ($sortedSuccessfulStates.Count -gt 0) {
         $stateList = $sortedSuccessfulStates -join ", "
@@ -658,7 +671,7 @@ function Write-StateSummary {
         $logMessage | Out-File -FilePath $script:LogPath -Append -Encoding UTF8
     }
     
-    Write-Host "⏱️ Total time: $totalDuration`s" -ForegroundColor Gray
+    Write-Host "⏱️ Total time: $totalDuration`s`n" -ForegroundColor Gray
     
     # Log to file
     $logMessage = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') [INFO] - ⏱️ Total time: $totalDuration`s"

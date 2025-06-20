@@ -231,8 +231,7 @@ function Invoke-State {
             }
         }
     }
-    
-    # Handle wait polling if defined
+      # Handle wait polling if defined
     if ($stateConfig.readiness -and ($stateConfig.readiness.waitCommand -or $stateConfig.readiness.waitEndpoint)) {
         $maxRetries = 10
         $retryInterval = 3  
@@ -247,9 +246,12 @@ function Invoke-State {
         
         # Use endpoint-based waiting if configured
         if ($stateConfig.readiness.waitEndpoint) {
-            Write-StateLog $StateName "Using wait endpoint for readiness polling: $($stateConfig.readiness.waitEndpoint)" "INFO"
+            # State machine logging doesn't show polling details
+            if (-not $UseStateMachineLogging) {
+                Write-StateLog $StateName "Using wait endpoint for readiness polling: $($stateConfig.readiness.waitEndpoint)" "INFO"
+            }
             
-            if (-not (ReadinessChecks\Test-EndpointReadiness -Uri $stateConfig.readiness.waitEndpoint -StateName $StateName -MaxRetries $maxRetries -RetryInterval $retryInterval -SuccessfulRetries $successfulRetries -MaxTimeSeconds $maxTimeSeconds)) {
+            if (-not (ReadinessChecks\Test-EndpointReadiness -Uri $stateConfig.readiness.waitEndpoint -StateName $StateName -MaxRetries $maxRetries -RetryInterval $retryInterval -SuccessfulRetries $successfulRetries -MaxTimeSeconds $maxTimeSeconds -Quiet:$UseStateMachineLogging)) {
                 # State Machine logging - complete state with failure
                 if ($UseStateMachineLogging) {
                     Complete-State -StateName $StateName -Success $false -ErrorMessage "Failed to become ready via endpoint polling"
@@ -265,7 +267,12 @@ function Invoke-State {
         elseif ($stateConfig.readiness.waitCommand) {
             $command = $stateConfig.readiness.waitCommand
             
-            if (-not (ReadinessChecks\Test-ContinueAfter -Command $command -StateName $StateName -MaxRetries $maxRetries -RetryInterval $retryInterval -SuccessfulRetries $successfulRetries -MaxTimeSeconds $maxTimeSeconds -StateConfig $stateConfig)) {
+            # State machine logging doesn't show polling details
+            if (-not $UseStateMachineLogging) {
+                Write-StateLog $StateName "Using wait command for readiness polling: $command" "INFO"
+            }
+            
+            if (-not (ReadinessChecks\Test-ContinueAfter -Command $command -StateName $StateName -MaxRetries $maxRetries -RetryInterval $retryInterval -SuccessfulRetries $successfulRetries -MaxTimeSeconds $maxTimeSeconds -StateConfig $stateConfig -Quiet:$UseStateMachineLogging)) {
                 # State Machine logging - complete state with failure
                 if ($UseStateMachineLogging) {
                     Complete-State -StateName $StateName -Success $false -ErrorMessage "Failed to become ready via command polling"
@@ -305,9 +312,8 @@ try {
         Write-Log "Target state: $Target" "INFO"
     }
     # State Machine logging
-    else {
-        Write-Log "▶️ Claude Task Runner (Target: $Target)" "INFO"
-        Write-Log "📋 Configuration loaded from $script:ConfigPath" "INFO"
+    else {        Write-Log "[INFO] ▶️ Claude Task Runner (Target: $Target)" "SYSTEM"
+        Write-Log "[INFO] 📋 Configuration loaded from $script:ConfigPath" "SYSTEM"
     }
     
     Configuration\Initialize-Environment

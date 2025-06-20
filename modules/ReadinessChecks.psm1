@@ -127,7 +127,10 @@ function Test-EndpointReadiness {
         [int]$SuccessfulRetries = 1,
         
         [Parameter(Mandatory=$false)]
-        [int]$MaxTimeSeconds = 30
+        [int]$MaxTimeSeconds = 30,
+        
+        [Parameter(Mandatory=$false)]
+        [switch]$Quiet
     )
     
     $attempt = 0
@@ -266,7 +269,7 @@ The state configuration.
 .OUTPUTS
 Returns $true if the command indicates the state is ready, $false otherwise.
 #>
-function Test-ContinueAfter {    
+function Test-ContinueAfter {
     param(
         [Parameter(Mandatory=$true)]
         [string]$Command,
@@ -287,7 +290,10 @@ function Test-ContinueAfter {
         [int]$MaxTimeSeconds = 30,
         
         [Parameter(Mandatory=$false)]
-        [hashtable]$StateConfig
+        [hashtable]$StateConfig,
+        
+        [Parameter(Mandatory=$false)]
+        [switch]$Quiet
     )
     
     $attempt = 0
