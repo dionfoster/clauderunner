@@ -1,5 +1,21 @@
 # CommandExecution.psm1 - Claude Task Runner command execution functions
 
+# Access to Logging module variables and functions
+# These are made available by the main script that imports both modules
+$script:LoggingMode = $script:LoggingMode # From Logging module
+
+# Access to state machine logging functions
+# These are imported by the main script
+function Start-StateTransitions { if (Get-Command Start-StateTransitions -ErrorAction SilentlyContinue) { Start-StateTransitions @args } }
+function Start-StateProcessing { if (Get-Command Start-StateProcessing -ErrorAction SilentlyContinue) { Start-StateProcessing @args } }
+function Write-StateCheck { if (Get-Command Write-StateCheck -ErrorAction SilentlyContinue) { Write-StateCheck @args } }
+function Write-StateCheckResult { if (Get-Command Write-StateCheckResult -ErrorAction SilentlyContinue) { Write-StateCheckResult @args } }
+function Start-StateActions { if (Get-Command Start-StateActions -ErrorAction SilentlyContinue) { Start-StateActions @args } }
+function Start-StateAction { if (Get-Command Start-StateAction -ErrorAction SilentlyContinue) { Start-StateAction @args } }
+function Complete-StateAction { if (Get-Command Complete-StateAction -ErrorAction SilentlyContinue) { Complete-StateAction @args } }
+function Complete-State { if (Get-Command Complete-State -ErrorAction SilentlyContinue) { Complete-State @args } }
+function Write-StateSummary { if (Get-Command Write-StateSummary -ErrorAction SilentlyContinue) { Write-StateSummary @args } }
+
 <#
 .SYNOPSIS
 Command Execution Module for Claude Task Runner
@@ -286,7 +302,10 @@ function Invoke-CommandWithTimeout {
         [bool]$PreserveWorkingDir = $false,
         
         [Parameter(Mandatory=$false)]
-        [string]$WorkingDirectory = ""
+        [string]$WorkingDirectory = "",
+        
+        [Parameter(Mandatory=$false)]
+        [string]$StateName = ""
     )
     
     # Save current location if we need to preserve it
@@ -298,8 +317,13 @@ function Invoke-CommandWithTimeout {
     
     try {
         if ($TimeoutSeconds -gt 0) {
-            if ($global:Verbose) {
-                Write-Log ("{0}Executing {1} command with timeout: {2}" -f $Icon, $CommandType.ToUpper(), $Command) "DEBUG"
+            # Support both logging modes for backward compatibility
+            if ($script:LoggingMode -eq "StateMachine") {
+                # State machine logging is handled by the caller
+            } else {
+                if ($global:Verbose) {
+                    Write-Log ("{0}Executing {1} command with timeout: {2}" -f $Icon, $CommandType.ToUpper(), $Command) "DEBUG"
+                }
             }
             
             if ($CommandType -eq "cmd") {
@@ -321,9 +345,16 @@ function Invoke-CommandWithTimeout {
                 return @{ Success = $false; Output = "Timeout after $TimeoutSeconds seconds" }
             }
         } else {
-            if ($global:Verbose) {
-                Write-Log ("{0}Executing {1} command: {2}" -f $Icon, $CommandType.ToUpper(), $Command) "DEBUG"
-            }            if ($CommandType -eq "cmd") {
+            # Support both logging modes for backward compatibility
+            if ($script:LoggingMode -eq "StateMachine") {
+                # State machine logging is handled by the caller
+            } else {
+                if ($global:Verbose) {
+                    Write-Log ("{0}Executing {1} command: {2}" -f $Icon, $CommandType.ToUpper(), $Command) "DEBUG"
+                }
+            }
+            
+            if ($CommandType -eq "cmd") {
                 $output = cmd /c $Command 2>&1
                 $success = $LASTEXITCODE -eq 0
             } else {
@@ -405,7 +436,12 @@ function Invoke-Command {
     $transformedCommand = ConvertTo-LaunchCommand -Command $resolvedCommand -LaunchVia $LaunchVia -WorkingDirectory $WorkingDirectory
     
     $timeoutText = if ($TimeoutSeconds -gt 0) { " (timeout: ${TimeoutSeconds}s)" } else { "" }
-    Write-StateLog $StateName "$Description`: $Command$timeoutText" "INFO"
+    
+    # Support both logging modes for backward compatibility
+    if ($script:LoggingMode -ne "StateMachine") {
+        Write-StateLog $StateName "$Description`: $Command$timeoutText" "INFO"
+    }
+    # The state machine mode logging is handled by the main script via Start-StateAction
     
     try {
         # Execute command
@@ -415,37 +451,60 @@ function Invoke-Command {
                                            -TimeoutSeconds $TimeoutSeconds `
                                            -Icon $icon `
                                            -PreserveWorkingDir $transformedCommand.PreserveWorkingDir `
-                                           -WorkingDirectory $(if ($transformedCommand.PreserveWorkingDir) { $transformedCommand.WorkingDirectory } else { "" })
-        
-        # Check for success and error patterns in output
+                                           -WorkingDirectory $(if ($transformedCommand.PreserveWorkingDir) { $transformedCommand.WorkingDirectory } else { "" }) `
+                                           -StateName $StateName
+          # Check for success and error patterns in output
         if ($result.Success -and $result.Output) {
             $outputString = $result.Output | Out-String
             if (Test-OutputForErrors -OutputString $outputString) {
-                Write-StateLog $StateName "✗ $Description completed but detected errors in output" "ERROR"
-                if ($global:Verbose) {
-                    Write-StateLog $StateName "Error output: $($outputString.Trim())" "DEBUG"
+                # Support both logging modes for backward compatibility
+                if ($script:LoggingMode -ne "StateMachine") {
+                    Write-StateLog $StateName "✗ $Description completed but detected errors in output" "ERROR"
+                    if ($global:Verbose) {
+                        Write-StateLog $StateName "Error output: $($outputString.Trim())" "DEBUG"
+                    }
                 }
+                # In state machine mode, the error reporting would normally be handled by Complete-StateAction in the main script
+                # However, since we're returning false but the command technically succeeded with a non-zero exit code,
+                # we should log that specific error pattern here
+                
                 return $false
             }
         }
         
         if ($result.Success) {
-            Write-StateLog $StateName "✓ $Description completed successfully" "SUCCESS"
-            if ($global:Verbose -and $result.Output) {
-                Write-StateLog $StateName "Output: $($result.Output)" "DEBUG"
+            # Support both logging modes for backward compatibility
+            if ($script:LoggingMode -ne "StateMachine") {
+                Write-StateLog $StateName "✓ $Description completed successfully" "SUCCESS"
+                if ($global:Verbose -and $result.Output) {
+                    Write-StateLog $StateName "Output: $($result.Output)" "DEBUG"
+                }
             }
+            # In state machine mode, the success reporting is handled by Complete-StateAction in the main script
+            
             return $true
         } else {
             $exitCode = if ($TimeoutSeconds -gt 0) { "TIMEOUT" } else { $LASTEXITCODE }
-            Write-StateLog $StateName "✗ $Description failed (Exit Code: $exitCode)" "ERROR"
-            if ($result.Output) {
-                Write-StateLog $StateName "Error Output: $($result.Output)" "ERROR"
+            
+            # Support both logging modes for backward compatibility
+            if ($script:LoggingMode -ne "StateMachine") {
+                Write-StateLog $StateName "✗ $Description failed (Exit Code: $exitCode)" "ERROR"
+                if ($result.Output) {
+                    Write-StateLog $StateName "Error Output: $($result.Output)" "ERROR"
+                }
             }
+            # In state machine mode, the error reporting is handled by Complete-StateAction in the main script
+            
             return $false
         }
     }
     catch {
-        Write-StateLog $StateName "✗ $Description failed with exception: $($_.Exception.Message)" "ERROR"
+        # Support both logging modes for backward compatibility
+        if ($script:LoggingMode -ne "StateMachine") {
+            Write-StateLog $StateName "✗ $Description failed with exception: $($_.Exception.Message)" "ERROR"
+        }
+        # In state machine mode, the error reporting is handled by Complete-StateAction in the main script
+        
         return $false
     }
 }
