@@ -414,7 +414,7 @@ function Test-PreCheck {
 function Test-StateConfiguration {
     param([hashtable]$StateConfig, [string]$StateName)
     
-    if (-not $StateConfig.run -and -not $StateConfig.wait) {
+    if (-not $StateConfig.run -and -not $StateConfig.waitFor) {
         throw "State '$StateName' has no actions or polling defined"
     }
     
@@ -523,10 +523,9 @@ function Run-State {
             }
         }
     }
-    
-    # Handle wait polling if defined (simplified)
-    if ($stateConfig.wait) {
-        $command = $stateConfig.wait
+      # Handle wait polling if defined (simplified)
+    if ($stateConfig.waitFor) {
+        $command = $stateConfig.waitFor
         
         # Use smart defaults for polling
         $maxRetries = 10

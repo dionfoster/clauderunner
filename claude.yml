@@ -5,7 +5,7 @@ states:
     run:
       - app: 'C:\Program Files\Docker\Docker\Docker Desktop.exe'
         desc: "Starting Docker Desktop"
-    wait: docker info
+    waitFor: docker info
 
   dockerReady:
     needs: [dockerStartup]
