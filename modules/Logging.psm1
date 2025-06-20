@@ -192,7 +192,7 @@ function Start-StateProcessing {
         "Actions" = @()
     }    # Format dependencies with check marks
     $depText = if ($Dependencies.Count -gt 0) { 
-        $formattedDeps = $Dependencies | ForEach-Object { "$_✓" }
+        $formattedDeps = $Dependencies | ForEach-Object { "$_ ✓" }
         "Dependencies: $($formattedDeps -join ', ')" 
     } else { 
         "Dependencies: none" 
