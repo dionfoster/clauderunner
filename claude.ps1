@@ -5,42 +5,18 @@ param(
     [switch]$Verbose
 )
 
-$ConfigPath = "claude.yml"
-$LogPath = "claude.log"
+$script:ConfigPath = "claude.yml"
+$script:LogPath = "claude.log"
 
-function Write-Log {
-    param([string]$Message, [string]$Level = "INFO")
-    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    $emoji = ""
-    $color = "White"
-    switch ($Level) {
-        "INFO" { $color = "Gray"; $emoji = "ℹ️ " }
-        "SUCCESS" { $color = "Green"; $emoji = "✅ " }
-        "WARN" { $color = "Yellow"; $emoji = "⚠️ " }
-        "ERROR" { $color = "Red"; $emoji = "❌ " }
-        "DEBUG" { $color = "Cyan"; $emoji = "🔍 " }
-    }
-    $fullMessage = "$timestamp [$Level] - $emoji$Message"
-    Write-Host $fullMessage -ForegroundColor $color
-    $fullMessage | Out-File -FilePath $LogPath -Append -Encoding UTF8
-}
+# Import modules
+$modulesPath = Join-Path $PSScriptRoot "modules"
+Import-Module (Join-Path $modulesPath "Logging.psm1") -Force
+Import-Module (Join-Path $modulesPath "Configuration.psm1") -Force
 
-function Write-StateLog {
-    param([string]$StateName, [string]$Message, [string]$Level = "INFO")
-    $icon = Get-StateIcon $StateName
-    Write-Log ("{0}{1}" -f $icon, $Message) $Level
-}
-
-function Get-StateIcon {
-    param([string]$StateName)
-    switch ($StateName.ToLower()) {
-        "dockerready" { return "🐳 " }
-        "dockerstartup" { return "⚙️ " }
-        "nodeready"   { return "🟢 " }
-        "apiready"    { return "🚀 " }
-        default       { return "⚙️ " }
-    }
-}
+# Set the log path in the logging module
+Set-LogPath -Path $script:LogPath
+# Set the config path in the configuration module
+Set-ConfigPath -Path $script:ConfigPath
 
 function Initialize-Environment {
     if (-not (Get-Module -ListAvailable -Name powershell-yaml)) {
@@ -507,7 +483,7 @@ function Invoke-State {
         return $false
     }
     
-    # Validate configuration
+    # Validate configuration    
     try {
         Test-StateConfiguration -StateConfig $stateConfig -StateName $StateName
     }
@@ -527,9 +503,9 @@ function Invoke-State {
                 Write-StateLog $StateName "Dependency $dependency failed for state $StateName" "ERROR"
                 return $false
             }
-        }
-    }
-      # Perform pre-check if defined
+        }    }
+    
+    # Perform pre-check if defined
     $skipActions = $false
     
     if ($stateConfig.readiness) {
@@ -590,11 +566,12 @@ function Invoke-State {
             if ($action.newWindow) { $params.LaunchVia = "newWindow" }
             
             if (-not (Invoke-Command @params)) {
-                Write-StateLog $StateName "Action failed in state $StateName" "ERROR"
-                return $false
+                Write-StateLog $StateName "Action failed in state $StateName" "ERROR"                return $false
             }
         }
-    }    # Handle wait polling if defined
+    }
+    
+    # Handle wait polling if defined
     if ($stateConfig.readiness -and ($stateConfig.readiness.waitCommand -or $stateConfig.readiness.waitEndpoint)) {
         $maxRetries = 10
         $retryInterval = 3  
@@ -721,11 +698,11 @@ function Test-EndpointReadiness {
 
 # Main execution
 try {
-    Write-Log "Starting Claude MCP-style Task Runner" "INFO"
+    Write-Log "Starting Claude MCP-style Task Runner" "INFO"    
     Write-Log "Target state: $Target" "INFO"
     
     Initialize-Environment
-    $config = Load-Configuration
+    $config = Get-Configuration
     
     # Track processed states for this run only
     $processedStates = New-Object System.Collections.Generic.HashSet[string]

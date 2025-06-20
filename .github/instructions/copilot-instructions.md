@@ -8,6 +8,13 @@ applyTo: '**'
 - **Maintainability**: Well-documented, consistent code patterns
 - **Robustness**: Thorough error handling and graceful failure modes
 
+## Refactoring Guidelines
+- Refactor for clarity, not just to reduce lines of code
+- Avoid premature optimization; focus on clear, maintainable code first
+- Use descriptive names for functions and variables to convey intent
+- Break down large functions into smaller, reusable components
+- For each refactor, make small incremental changes and test thoroughly
+
 ## PowerShell Standards
 - Use explicit parameter validation and help documentation
 - Follow consistent error handling patterns with try/catch blocks
