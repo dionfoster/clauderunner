@@ -87,9 +87,8 @@ function Test-OutputForErrors {
     param([string]$OutputString)
     
     $errorPatterns = @(
-        "error", "not found", "unable", "fail", "failed", "panic", "exception",
-        "no such file", "is not running", "could not connect", "connection refused",
-        "access denied", "permission denied", "timeout", "unreachable"
+        "error", "not found", "unable", "fail", "failed",
+        "no such file", "connection refused"
     )
     
     foreach ($pattern in $errorPatterns) {
@@ -103,15 +102,13 @@ function Test-OutputForErrors {
 function Get-ExecutableAndArgs {
     param([string]$Command)
     
-    if ($Command -match '^"([^"]+)"\s*(.*)$') {
-        return $matches[1], $matches[2].Trim()
-    } else {
-        $split = $Command.IndexOf(' ')
-        if ($split -eq -1) { 
-            return $Command, ""
-        }
-        return $Command.Substring(0, $split), $Command.Substring($split + 1)
+    $split = $Command.IndexOf(' ')
+
+    if ($split -eq -1) { 
+        return $Command, ""
     }
+
+    return $Command.Substring(0, $split), $Command.Substring($split + 1)
 }
 
 function Build-StartProcessCommand {
@@ -219,12 +216,8 @@ function Invoke-Command {
         [string]$WorkingDirectory = "",
         [int]$TimeoutSeconds = 0
     )
-    
-    # Transform command based on launch method
+      # Transform command based on launch method
     $transformedCommand = Transform-CommandForLaunch -Command $Command -LaunchVia $LaunchVia -WorkingDirectory $WorkingDirectory
-    if ($CommandType -eq "cmd") {
-        $transformedCommand.CommandType = "cmd"
-    }
     
     $timeoutText = if ($TimeoutSeconds -gt 0) { " (timeout: ${TimeoutSeconds}s)" } else { "" }
     Write-StateLog $StateName "$Description`: $Command$timeoutText" "INFO"
@@ -434,13 +427,14 @@ function Run-State {
         [hashtable]$Config,
         [System.Collections.Generic.HashSet[string]]$ProcessedStates
     )
-    
+
     # Avoid infinite loops
     if ($ProcessedStates.Contains($StateName)) {
         Write-StateLog $StateName "State $StateName already processed in this run" "DEBUG"
         return $true
     }
-      # Get state configuration - only using 'states' root key
+    
+    # Get state configuration - only using 'states' root key
     $stateConfig = $null
     if ($Config.states -and $Config.states.$StateName) {
         $stateConfig = $Config.states.$StateName
@@ -495,13 +489,13 @@ function Run-State {
                 LaunchVia = "console"
                 WorkingDirectory = ""
             }
-              if ($action -is [string]) {
+            
+            if ($action -is [string]) {
                 # Simple string command - default to PowerShell
                 $params.Command = $action
             } elseif ($action.command) {
                 # Generic command - default to PowerShell
                 $params.Command = $action.command
-                $params.CommandType = "powershell"
             } elseif ($action.app) {
                 # App launch - always use windowsApp
                 $params.Command = $action.app

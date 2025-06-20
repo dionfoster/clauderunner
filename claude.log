@@ -1,0 +1,36 @@
+2025-06-20 12:58:36 [INFO] - ℹ️ Starting Claude MCP-style Task Runner
+2025-06-20 12:58:36 [INFO] - ℹ️ Target state: dockerReady
+2025-06-20 12:58:36 [SUCCESS] - ✅ Configuration loaded successfully from claude.yml
+2025-06-20 12:58:36 [INFO] - ℹ️ 🐳 Processing state: dockerReady
+2025-06-20 12:58:36 [INFO] - ℹ️ 🐳 Resolving dependencies for dockerReady: dockerStartup
+2025-06-20 12:58:36 [INFO] - ℹ️ ⚙️ Processing state: dockerStartup
+2025-06-20 12:58:36 [INFO] - ℹ️ ⚙️ Checking if dockerStartup is already ready...
+2025-06-20 12:58:40 [SUCCESS] - ✅ ⚙️ ✓ State dockerStartup is already ready, skipping actions
+2025-06-20 12:58:40 [INFO] - ℹ️ 🐳 Checking if dockerReady is already ready...
+2025-06-20 12:58:41 [SUCCESS] - ✅ 🐳 ✓ State dockerReady is already ready, skipping actions
+2025-06-20 12:58:41 [INFO] - ℹ️ === Run Summary ===
+2025-06-20 12:58:41 [SUCCESS] - ✅ 🎉 Task runner completed successfully!
+2025-06-20 13:05:15 [INFO] - ℹ️ Starting Claude MCP-style Task Runner
+2025-06-20 13:05:15 [INFO] - ℹ️ Target state: dockerReady
+2025-06-20 13:05:15 [SUCCESS] - ✅ Configuration loaded successfully from claude.yml
+2025-06-20 13:05:16 [INFO] - ℹ️ 🐳 Processing state: dockerReady
+2025-06-20 13:05:16 [INFO] - ℹ️ 🐳 Resolving dependencies for dockerReady: dockerStartup
+2025-06-20 13:05:16 [INFO] - ℹ️ ⚙️ Processing state: dockerStartup
+2025-06-20 13:05:16 [INFO] - ℹ️ ⚙️ Checking if dockerStartup is already ready...
+2025-06-20 13:05:20 [SUCCESS] - ✅ ⚙️ ✓ State dockerStartup is already ready, skipping actions
+2025-06-20 13:05:20 [INFO] - ℹ️ 🐳 Checking if dockerReady is already ready...
+2025-06-20 13:05:21 [SUCCESS] - ✅ 🐳 ✓ State dockerReady is already ready, skipping actions
+2025-06-20 13:05:21 [INFO] - ℹ️ === Run Summary ===
+2025-06-20 13:05:21 [SUCCESS] - ✅ 🎉 Task runner completed successfully!
+2025-06-20 13:16:33 [INFO] - ℹ️ Starting Claude MCP-style Task Runner
+2025-06-20 13:16:33 [INFO] - ℹ️ Target state: dockerReady
+2025-06-20 13:16:33 [SUCCESS] - ✅ Configuration loaded successfully from claude.yml
+2025-06-20 13:16:33 [INFO] - ℹ️ 🐳 Processing state: dockerReady
+2025-06-20 13:16:33 [INFO] - ℹ️ 🐳 Resolving dependencies for dockerReady: dockerStartup
+2025-06-20 13:16:33 [INFO] - ℹ️ ⚙️ Processing state: dockerStartup
+2025-06-20 13:16:33 [INFO] - ℹ️ ⚙️ Checking if dockerStartup is already ready...
+2025-06-20 13:16:36 [SUCCESS] - ✅ ⚙️ ✓ State dockerStartup is already ready, skipping actions
+2025-06-20 13:16:36 [INFO] - ℹ️ 🐳 Checking if dockerReady is already ready...
+2025-06-20 13:16:37 [SUCCESS] - ✅ 🐳 ✓ State dockerReady is already ready, skipping actions
+2025-06-20 13:16:37 [INFO] - ℹ️ === Run Summary ===
+2025-06-20 13:16:37 [SUCCESS] - ✅ 🎉 Task runner completed successfully!
