@@ -27,14 +27,31 @@ The task runner is configured through a YAML file (`claude.yml`) that defines st
 ```yaml
 states:
   stateName:
+    # Each state now follows a consistent format
     readiness:
-      checkCommand: command-to-check-readiness
-      waitCommand: command-to-verify-readiness
-    needs: [dependency1, dependency2]
-    actions:
-      - command1
-      - command2
+      checkCommand: command-to-check-readiness   # Pre-check before running actions
+      checkEndpoint: http://localhost:5000/ready # Alternative to checkCommand
+      waitCommand: command-to-verify-readiness   # Post-check after actions
+      waitEndpoint: http://localhost:5000/ready  # Alternative to waitCommand
+      maxRetries: 10        # Maximum retry attempts
+      retryInterval: 3      # Seconds between retries
+      successfulRetries: 1  # Required consecutive successes
+      maxTimeSeconds: 30    # Total timeout period
+    
+    needs: [dependency1, dependency2]  # States that must complete first
+    
+    actions:  # List of actions to execute
+      - command1  # Simple command format
+      - type: command
+        command: npm install
+        workingDirectory: ./frontend
+        description: "Installing dependencies"
+      - type: application
+        path: "C:\\Program Files\\App\\App.exe"
+        description: "Starting application"
 ```
+
+Each state follows this structure exactly, making configurations consistent and easy to understand.
 
 ### Configuration Options
 
@@ -225,6 +242,57 @@ This example:
    - Requires 2 consecutive successful checks
    - Will wait up to 60 seconds total
 
+## Output Format
+
+The task runner provides clear, visual output using state machine-style formatting:
+
+```plaintext
+▶️ Claude Task Runner (Target: nodeReady)
+📋 Configuration loaded from claude.yml
+
+STATE TRANSITIONS:
+┌─ STATE: 🔄 dockerStartup
+│  ├─ Dependencies: none
+│  ├─ Check: 🔍 Command check (docker info)
+│  └─ Result: ✅ READY (already ready via command check)
+
+┌─ STATE: 🔄 dockerReady
+│  ├─ Dependencies: dockerStartup ✓
+│  ├─ Check: 🔍 Command check (docker info)
+│  └─ Result: ✅ READY (already ready via command check)
+
+┌─ STATE: 🔄 apiReady
+│  ├─ Dependencies: dockerReady ✓
+│  ├─ Check: 🔍 Endpoint check (https://localhost:5001/healthcheck)
+│  └─ Result: ✅ READY (endpoint status: 200 OK)
+
+┌─ STATE: 🔄 nodeReady
+│  ├─ Dependencies: apiReady ✓
+│  ├─ Actions: ⏳ EXECUTING
+│  │  ├─ Command: Set-NodeVersion -Version v22.16.0
+│  │  │  └─ Status: ✓ SUCCESS (0.3s)
+│  │  ├─ Command: node --version
+│  │  │  └─ Status: ✓ SUCCESS (0.4s)
+│  │  ├─ Command: npm install
+│  │  │  └─ Status: ✓ SUCCESS (6.1s)
+│  │  └─ Command: npm run dev (Starting Identity SPA)
+│  │     └─ Status: ✓ SUCCESS (0.2s)
+│  └─ Result: ✅ COMPLETED (7.0s)
+
+SUMMARY:
+✅ Successfully processed: dockerStartup, dockerReady, apiReady, nodeReady
+⏱️ Total time: 11.0s
+```
+
+### Output Features
+
+The task runner output shows:
+- Clean header with target state
+- State transitions with dependency information
+- Command execution status and timing
+- Readiness check results
+- Simple summary showing processed states and total time
+
 ## Usage
 
 ### Basic Usage
@@ -314,6 +382,33 @@ This ensures that each command runs in its specified directory without affecting
 - **Docker commands failing**: Ensure Docker Desktop is running
 - **Command timeout**: Increase timeout values for long-running commands
 - **Path issues**: Use absolute paths and proper escaping in YAML
+- **Timing discrepancies**: States showing "(s)" instead of a time usually means they completed too quickly to measure and will show as "(0s)"
+
+## Output Customization
+
+The task runner provides carefully formatted output with:
+
+1. **Header Format**: Clean, emoji-prefixed headers without log level indicators:
+   ```
+   ▶️  Claude Task Runner (Target: nodeReady)
+   📋 Configuration loaded from claude.yml
+   ```
+
+2. **Dependency Format**: Dependencies are shown with proper spacing:
+   ```
+   ├─ Dependencies: apiReady ✓
+   ```
+
+3. **Action Status**: Command execution shows timing and status:
+   ```
+   │  ├─ Command: npm install
+   │  │  └─ Status: ✓ SUCCESS (4.8s)
+   ```
+
+4. **State Results**: State completion shows timing:
+   ```
+   └─ Result: ✅ COMPLETED (7.0s)
+   ```
 
 ## Customizing the Runner
 

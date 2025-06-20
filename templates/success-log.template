@@ -1,5 +1,5 @@
-[17:21:51] [INFO] ▶️ Claude Task Runner (Target: nodeReady)
-[17:21:51] [INFO] 📋 Configuration loaded from claude.yml
+▶️ Claude Task Runner (Target: nodeReady)
+📋 Configuration loaded from claude.yml
 
 STATE TRANSITIONS:
 ┌─ STATE: 🔄 dockerStartup
