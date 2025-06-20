@@ -290,21 +290,33 @@ function Invoke-Command {
     }
 }
 
-function Test-ContinueAfter {    param(
+function Test-ContinueAfter {    
+    param(
         [string]$Command,
         [string]$StateName,
         [int]$MaxRetries = 10,
         [int]$RetryInterval = 3,
         [int]$SuccessfulRetries = 1,
-        [int]$MaxTimeSeconds = 30
+        [int]$MaxTimeSeconds = 30,
+        [hashtable]$StateConfig
     )
     
     $attempt = 0
     $successCount = 0
     $startTime = Get-Date
     
+    # Use configuration values if provided
+    if ($StateConfig.readiness.maxRetries) { $MaxRetries = $StateConfig.readiness.maxRetries }
+    if ($StateConfig.readiness.retryInterval) { $RetryInterval = $StateConfig.readiness.retryInterval }
+    if ($StateConfig.readiness.successfulRetries) { $SuccessfulRetries = $StateConfig.readiness.successfulRetries }
+    if ($StateConfig.readiness.maxTimeSeconds) { $MaxTimeSeconds = $StateConfig.readiness.maxTimeSeconds }
+    
     Write-StateLog $StateName "Waiting for $StateName to be ready..." "INFO"
     Write-StateLog $StateName "Will retry up to $MaxRetries times (every ${RetryInterval}s), need $SuccessfulRetries successful checks, max ${MaxTimeSeconds}s total" "INFO"
+    
+    # Check if this is an endpoint check
+    $isEndpointCheck = $null -ne $StateConfig.readiness.endpoint
+    $endpointUri = $StateConfig.readiness.endpoint
     
     do {
         $attempt++
@@ -312,39 +324,50 @@ function Test-ContinueAfter {    param(
         
         Write-StateLog $StateName "Attempt $attempt/$MaxRetries - checking $StateName status... (elapsed: ${elapsed}s)" "INFO"
         
-        try {
-            $output = Invoke-Expression $Command 2>&1 
-            $success = $LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq $null
-            
-            if ($success) {
-                $outputString = $output | Out-String
-                  if (-not (Test-OutputForErrors -OutputString $outputString)) {
-                    $successCount++
-                    Write-StateLog $StateName "✓ Check passed ($successCount/$SuccessfulRetries successful checks)" "SUCCESS"
-                    
-                    if ($successCount -ge $SuccessfulRetries) {
-                        Write-StateLog $StateName "✓ $StateName is ready! ($successCount successful checks in ${elapsed}s)" "SUCCESS"
-                        return $true
+        $success = $false
+        
+        if ($isEndpointCheck) {
+            # Handle endpoint check
+            $success = Test-WebEndpoint -Uri $endpointUri -StateName $StateName
+        } else {
+            # Handle normal command
+            try {
+                $output = Invoke-Expression $Command 2>&1 
+                $success = $LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq $null
+                
+                if ($success) {
+                    $outputString = $output | Out-String
+                    if (Test-OutputForErrors -OutputString $outputString) {
+                        $success = $false
+                        Write-StateLog $StateName "⚠ Check detected errors in output" "WARN"
+                        if ($Verbose) {
+                            Write-StateLog $StateName "Error output: $($outputString.Trim())" "DEBUG"
+                        }
                     }
                 } else {
-                    $successCount = 0  # Reset on error
-                    Write-StateLog $StateName "⚠ Check detected errors, resetting success count" "WARN"
-                    if ($Verbose) {
-                        Write-StateLog $StateName "Error output: $($outputString.Trim())" "DEBUG"
+                    if ($Verbose -and $output) {
+                        $outputString = $output | Out-String
+                        Write-StateLog $StateName "Error details: $($outputString.Trim())" "DEBUG"
                     }
                 }
-            } else {
-                $successCount = 0  # Reset on failure
-                Write-StateLog $StateName "✗ Check failed (Exit Code: $LASTEXITCODE)" "WARN"
-                if ($Verbose -and $output) {
-                    $outputString = $output | Out-String
-                    Write-StateLog $StateName "Error details: $($outputString.Trim())" "DEBUG"
-                }
+            }
+            catch {
+                $success = $false
+                Write-StateLog $StateName "✗ Check exception: $($_.Exception.Message)" "WARN"
             }
         }
-        catch {
-            $successCount = 0  # Reset on exception
-            Write-StateLog $StateName "✗ Check exception: $($_.Exception.Message)" "WARN"
+        
+        if ($success) {
+            $successCount++
+            Write-StateLog $StateName "✓ Check passed ($successCount/$SuccessfulRetries successful checks)" "SUCCESS"
+            
+            if ($successCount -ge $SuccessfulRetries) {
+                Write-StateLog $StateName "✓ $StateName is ready! ($successCount successful checks in ${elapsed}s)" "SUCCESS"
+                return $true
+            }
+        } else {
+            $successCount = 0  # Reset on failure
+            Write-StateLog $StateName "✗ Check failed" "WARN"
         }
         
         # Check if we have exceeded time limit
@@ -375,8 +398,10 @@ function Test-PreCheck {
         [hashtable]$StateConfig
     )
     
-    Write-StateLog $StateName "Checking if $StateName is already ready..." "INFO"
-      try {
+    Write-StateLog $StateName "Checking if $StateName is already ready using command..." "INFO"
+    
+    # Default command execution
+    try {
         if ($Verbose) {
             Write-StateLog $StateName "Check command: $CheckCommand" "DEBUG"
         }
@@ -428,8 +453,19 @@ function Test-PreCheck {
 function Test-StateConfiguration {
     param([hashtable]$StateConfig, [string]$StateName)
     
-    if (-not $StateConfig.actions -and -not ($StateConfig.readiness -and $StateConfig.readiness.waitCommand)) {
-        throw "State '$StateName' has no actions or wait command defined"
+    # Handle both classic and endpoint-based configurations
+    $hasValidReadiness = $false
+    
+    if ($StateConfig.readiness) {
+        if ($StateConfig.readiness.checkEndpoint -or $StateConfig.readiness.waitEndpoint) {
+            $hasValidReadiness = $true
+        } elseif ($StateConfig.readiness.checkCommand) {
+            $hasValidReadiness = $true
+        }
+    }
+    
+    if (-not $StateConfig.actions -and -not $hasValidReadiness) {
+        throw "State '$StateName' has no actions or valid readiness check defined"
     }
     
     if ($StateConfig.actions) {
@@ -493,13 +529,28 @@ function Invoke-State {
             }
         }
     }
+      # Perform pre-check if defined
+    $skipActions = $false
     
-    # Perform pre-check if defined
-    if ($stateConfig.readiness -and $stateConfig.readiness.checkCommand) {
-        if (Test-PreCheck -CheckCommand $stateConfig.readiness.checkCommand -StateName $StateName -StateConfig $stateConfig) {
-            $ProcessedStates.Add($StateName) | Out-Null
-            return $true
+    if ($stateConfig.readiness) {
+        if ($stateConfig.readiness.checkEndpoint) {
+            Write-StateLog $StateName "Checking if $StateName is already ready using endpoint..." "INFO"
+            if (Test-WebEndpoint -Uri $stateConfig.readiness.checkEndpoint -StateName $StateName) {
+                Write-StateLog $StateName "✓ State $StateName is already ready via endpoint check, skipping actions" "SUCCESS"
+                $skipActions = $true
+            }
         }
+        elseif ($stateConfig.readiness.checkCommand) {
+            if (Test-PreCheck -CheckCommand $stateConfig.readiness.checkCommand -StateName $StateName -StateConfig $stateConfig) {
+                $skipActions = $true
+            }
+        }
+    }
+    
+    # If pre-check succeeded, skip actions and mark as processed
+    if ($skipActions) {
+        $ProcessedStates.Add($StateName) | Out-Null
+        return $true
     }
     
     # Execute actions
@@ -543,12 +594,8 @@ function Invoke-State {
                 return $false
             }
         }
-    }
-    
-    # Handle wait polling if defined
-    if ($stateConfig.readiness -and $stateConfig.readiness.waitCommand) {
-        $command = $stateConfig.readiness.waitCommand
-          # Use smart defaults for polling
+    }    # Handle wait polling if defined
+    if ($stateConfig.readiness -and ($stateConfig.readiness.waitCommand -or $stateConfig.readiness.waitEndpoint)) {
         $maxRetries = 10
         $retryInterval = 3  
         $successfulRetries = 1
@@ -560,9 +607,23 @@ function Invoke-State {
         if ($stateConfig.readiness.successfulRetries) { $successfulRetries = $stateConfig.readiness.successfulRetries }
         if ($stateConfig.readiness.maxTimeSeconds) { $maxTimeSeconds = $stateConfig.readiness.maxTimeSeconds }
         
-        if (-not (Test-ContinueAfter -Command $command -StateName $StateName -MaxRetries $maxRetries -RetryInterval $retryInterval -SuccessfulRetries $successfulRetries -MaxTimeSeconds $maxTimeSeconds)) {
-            Write-StateLog $StateName "State $StateName failed to become ready" "ERROR"
-            return $false
+        # Use endpoint-based waiting if configured
+        if ($stateConfig.readiness.waitEndpoint) {
+            Write-StateLog $StateName "Using wait endpoint for readiness polling: $($stateConfig.readiness.waitEndpoint)" "INFO"
+            
+            if (-not (Test-EndpointReadiness -Uri $stateConfig.readiness.waitEndpoint -StateName $StateName -MaxRetries $maxRetries -RetryInterval $retryInterval -SuccessfulRetries $successfulRetries -MaxTimeSeconds $maxTimeSeconds)) {
+                Write-StateLog $StateName "State $StateName failed to become ready" "ERROR"
+                return $false
+            }
+        }
+        # Otherwise use command-based waiting
+        elseif ($stateConfig.readiness.waitCommand) {
+            $command = $stateConfig.readiness.waitCommand
+            
+            if (-not (Test-ContinueAfter -Command $command -StateName $StateName -MaxRetries $maxRetries -RetryInterval $retryInterval -SuccessfulRetries $successfulRetries -MaxTimeSeconds $maxTimeSeconds -StateConfig $stateConfig)) {
+                Write-StateLog $StateName "State $StateName failed to become ready" "ERROR"
+                return $false
+            }
         }
     }
     
@@ -570,6 +631,92 @@ function Invoke-State {
     $ProcessedStates.Add($StateName) | Out-Null
     Write-StateLog $StateName "State $StateName completed successfully" "SUCCESS"
     return $true
+}
+
+function Test-WebEndpoint {
+    param(
+        [string]$Uri,
+        [string]$StateName
+    )
+    
+    Write-StateLog $StateName "Checking endpoint: $Uri" "INFO"
+    
+    try {
+        $response = Invoke-WebRequest -Uri $Uri -UseBasicParsing -ErrorAction Stop
+        Write-StateLog $StateName "✓ Endpoint check passed: $Uri (Status: $($response.StatusCode))" "SUCCESS"
+        return $true
+    }
+    catch {
+        $statusCode = if ($_.Exception.Response) { $_.Exception.Response.StatusCode.value__ } else { "Error" }
+        $errorMsg = $_.Exception.Message
+        
+        if ($Verbose) {
+            Write-StateLog $StateName "✗ Endpoint check failed: $Uri (Status: $statusCode - $errorMsg)" "DEBUG"
+        } else {
+            Write-StateLog $StateName "✗ Endpoint check failed: $Uri (Status: $statusCode)" "WARN"
+        }
+        
+        return $false
+    }
+}
+
+function Test-EndpointReadiness {
+    param(
+        [string]$Uri,
+        [string]$StateName,
+        [int]$MaxRetries = 10,
+        [int]$RetryInterval = 3,
+        [int]$SuccessfulRetries = 1,
+        [int]$MaxTimeSeconds = 30
+    )
+    
+    $attempt = 0
+    $successCount = 0
+    $startTime = Get-Date
+    
+    Write-StateLog $StateName "Waiting for endpoint to be ready: $Uri" "INFO"
+    Write-StateLog $StateName "Will retry up to $MaxRetries times (every ${RetryInterval}s), need $SuccessfulRetries successful checks, max ${MaxTimeSeconds}s total" "INFO"
+    
+    do {
+        $attempt++
+        $elapsed = [int]((Get-Date) - $startTime).TotalSeconds
+        
+        Write-StateLog $StateName "Attempt $attempt/$MaxRetries - checking endpoint... (elapsed: ${elapsed}s)" "INFO"
+        
+        $success = Test-WebEndpoint -Uri $Uri -StateName $StateName
+        
+        if ($success) {
+            $successCount++
+            Write-StateLog $StateName "✓ Endpoint check passed ($successCount/$SuccessfulRetries successful checks)" "SUCCESS"
+            
+            if ($successCount -ge $SuccessfulRetries) {
+                Write-StateLog $StateName "✓ Endpoint $Uri is ready! ($successCount successful checks in ${elapsed}s)" "SUCCESS"
+                return $true
+            }
+        } else {
+            $successCount = 0  # Reset on failure
+            Write-StateLog $StateName "✗ Endpoint check failed" "WARN"
+        }
+        
+        # Check if we have exceeded time limit
+        if ($elapsed -ge $MaxTimeSeconds) {
+            Write-StateLog $StateName "✗ Endpoint $Uri failed to be ready within $MaxTimeSeconds seconds" "ERROR"
+            return $false
+        }
+        
+        # Check if we have exceeded retry limit
+        if ($attempt -ge $MaxRetries) {
+            Write-StateLog $StateName "✗ Endpoint $Uri failed to be ready after $MaxRetries attempts" "ERROR"
+            return $false
+        }
+        
+        # Wait before next attempt
+        if ($attempt -lt $MaxRetries -and $elapsed -lt $MaxTimeSeconds) {
+            Write-StateLog $StateName "Waiting ${RetryInterval}s before next attempt..." "INFO"
+            Start-Sleep $RetryInterval
+        }
+        
+    } while ($true)
 }
 
 # Main execution

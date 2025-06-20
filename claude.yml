@@ -25,14 +25,10 @@ states:
         command: docker start rabbitmq  # Backend API state that starts the .NET Identity API
   apiReady:
     readiness:
-      checkCommand: |
-        try { 
-          $webRequest = Invoke-WebRequest -Uri "https://localhost:5001/healthcheck" -UseBasicParsing -ErrorAction Stop
-          $true  # Return success
-        } catch { 
-          $false  # Return failure
-        }
-      waitCommand: Invoke-WebRequest -Uri "https://localhost:5001/healthcheck" -UseBasicParsing
+      checkEndpoint: "https://localhost:5001/healthcheck"
+      waitEndpoint: "https://localhost:5001/healthcheck"
+      maxRetries: 10
+      retryInterval: 3
     
     actions:
       - type: command
