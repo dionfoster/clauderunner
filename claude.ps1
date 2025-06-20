@@ -22,62 +22,6 @@ Set-ConfigPath -Path $script:ConfigPath
 # Set the global verbose flag for command execution
 $global:Verbose = $Verbose
 
-function Initialize-Environment {
-    if (-not (Get-Module -ListAvailable -Name powershell-yaml)) {
-        Write-Log "Installing powershell-yaml module..." "INFO"
-        try {
-            Install-Module -Name powershell-yaml -Force -Scope CurrentUser -Repository PSGallery
-            Write-Log "powershell-yaml module installed successfully." "SUCCESS"
-        }
-        catch {
-            Write-Log "Failed to install powershell-yaml module: $($_.Exception.Message)" "ERROR"
-            exit 1
-        }
-    }
-    
-    try {
-        Import-Module powershell-yaml -ErrorAction Stop
-    }
-    catch {
-        Write-Log "Failed to import powershell-yaml module: $($_.Exception.Message)" "ERROR"
-        exit 1
-    }
-}
-
-function Test-StateConfiguration {
-    param([hashtable]$StateConfig, [string]$StateName)
-    
-    # Handle both classic and endpoint-based configurations
-    $hasValidReadiness = $false
-    
-    if ($StateConfig.readiness) {
-        if ($StateConfig.readiness.checkEndpoint -or $StateConfig.readiness.waitEndpoint) {
-            $hasValidReadiness = $true
-        } elseif ($StateConfig.readiness.checkCommand) {
-            $hasValidReadiness = $true
-        }
-    }
-    
-    if (-not $StateConfig.actions -and -not $hasValidReadiness) {
-        throw "State '$StateName' has no actions or valid readiness check defined"
-    }
-    
-    if ($StateConfig.actions) {
-        foreach ($action in $StateConfig.actions) {
-            if ($action -is [string]) { continue }
-            if (-not ($action.type -eq "command" -or $action.type -eq "application")) {
-                throw "Invalid action in state '$StateName': must have type 'command' or 'application'"
-            }
-            if ($action.type -eq "command" -and -not $action.command) {
-                throw "Invalid command action in state '$StateName': missing 'command' property"
-            }
-            if ($action.type -eq "application" -and -not $action.path) {
-                throw "Invalid application action in state '$StateName': missing 'path' property"
-            }
-        }
-    }
-}
-
 function Invoke-State {
     param(
         [string]$StateName,
@@ -100,10 +44,9 @@ function Invoke-State {
         Write-StateLog $StateName "Unknown state: $StateName" "ERROR"
         return $false
     }
-    
-    # Validate configuration    
+      # Validate configuration    
     try {
-        Test-StateConfiguration -StateConfig $stateConfig -StateName $StateName
+        Configuration\Test-StateConfiguration -StateConfig $stateConfig -StateName $StateName
     }
     catch {
         Write-StateLog $StateName "Configuration error: $($_.Exception.Message)" "ERROR"
@@ -233,11 +176,10 @@ function Invoke-State {
 
 
 # Main execution
-try {
-    Write-Log "Starting Claude MCP-style Task Runner" "INFO"    
+try {    Write-Log "Starting Claude MCP-style Task Runner" "INFO"    
     Write-Log "Target state: $Target" "INFO"
     
-    Initialize-Environment
+    Configuration\Initialize-Environment
     $config = Get-Configuration
     
     # Track processed states for this run only
