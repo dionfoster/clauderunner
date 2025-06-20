@@ -1,5 +1,22 @@
 # ReadinessChecks.psm1 - Claude Task Runner readiness check functions
 
+# Access to Logging module variables and functions
+# These are made available by the main script that imports both modules
+# State Machine Logging mode
+$script:LoggingMode = $script:LoggingMode # From Logging module
+
+# Access to state machine logging functions
+# These are imported by the main script
+function Start-StateTransitions { if (Get-Command Start-StateTransitions -ErrorAction SilentlyContinue) { Start-StateTransitions @args } }
+function Start-StateProcessing { if (Get-Command Start-StateProcessing -ErrorAction SilentlyContinue) { Start-StateProcessing @args } }
+function Write-StateCheck { if (Get-Command Write-StateCheck -ErrorAction SilentlyContinue) { Write-StateCheck @args } }
+function Write-StateCheckResult { if (Get-Command Write-StateCheckResult -ErrorAction SilentlyContinue) { Write-StateCheckResult @args } }
+function Start-StateActions { if (Get-Command Start-StateActions -ErrorAction SilentlyContinue) { Start-StateActions @args } }
+function Start-StateAction { if (Get-Command Start-StateAction -ErrorAction SilentlyContinue) { Start-StateAction @args } }
+function Complete-StateAction { if (Get-Command Complete-StateAction -ErrorAction SilentlyContinue) { Complete-StateAction @args } }
+function Complete-State { if (Get-Command Complete-State -ErrorAction SilentlyContinue) { Complete-State @args } }
+function Write-StateSummary { if (Get-Command Write-StateSummary -ErrorAction SilentlyContinue) { Write-StateSummary @args } }
+
 <#
 .SYNOPSIS
 Tests if a web endpoint is accessible.
@@ -25,21 +42,39 @@ function Test-WebEndpoint {
         [string]$StateName
     )
     
-    Write-StateLog $StateName "Checking endpoint: $Uri" "INFO"
+    # Support both logging modes for backward compatibility
+    if ($script:LoggingMode -eq "StateMachine") {
+        # The main state check already logs this, so we don't need to log again
+        # State machine logging occurs in the main script via Write-StateCheck
+    } else {
+        Write-StateLog $StateName "Checking endpoint: $Uri" "INFO"
+    }
     
     try {
         $response = Invoke-WebRequest -Uri $Uri -UseBasicParsing -ErrorAction Stop
-        Write-StateLog $StateName "✓ Endpoint check passed: $Uri (Status: $($response.StatusCode))" "SUCCESS"
+        
+        # Support both logging modes for backward compatibility
+        if ($script:LoggingMode -eq "StateMachine") {
+            # Success will be reported by the main script via Write-StateCheckResult
+        } else {
+            Write-StateLog $StateName "✓ Endpoint check passed: $Uri (Status: $($response.StatusCode))" "SUCCESS"
+        }
+        
         return $true
     }
     catch {
         $statusCode = if ($_.Exception.Response) { $_.Exception.Response.StatusCode.value__ } else { "Error" }
         $errorMsg = $_.Exception.Message
         
-        if ($global:Verbose) {
-            Write-StateLog $StateName "✗ Endpoint check failed: $Uri (Status: $statusCode - $errorMsg)" "DEBUG"
+        # Support both logging modes for backward compatibility
+        if ($script:LoggingMode -eq "StateMachine") {
+            # Failure will be reported by the main script via Write-StateCheckResult
         } else {
-            Write-StateLog $StateName "✗ Endpoint check failed: $Uri (Status: $statusCode)" "WARN"
+            if ($global:Verbose) {
+                Write-StateLog $StateName "✗ Endpoint check failed: $Uri (Status: $statusCode - $errorMsg)" "DEBUG"
+            } else {
+                Write-StateLog $StateName "✗ Endpoint check failed: $Uri (Status: $statusCode)" "WARN"
+            }
         }
         
         return $false
@@ -99,45 +134,101 @@ function Test-EndpointReadiness {
     $successCount = 0
     $startTime = Get-Date
     
-    Write-StateLog $StateName "Waiting for endpoint to be ready: $Uri" "INFO"
-    Write-StateLog $StateName "Will retry up to $MaxRetries times (every ${RetryInterval}s), need $SuccessfulRetries successful checks, max ${MaxTimeSeconds}s total" "INFO"
+    # Support both logging modes for backward compatibility
+    if ($script:LoggingMode -eq "StateMachine") {
+        # Create a "polling" action for the endpoint check
+        $pollingDetails = "Polling endpoint: $Uri (max $MaxRetries tries, ${RetryInterval}s interval, need $SuccessfulRetries successes, timeout ${MaxTimeSeconds}s)"
+        $actionId = Start-StateAction -StateName $StateName -ActionType "Command" -ActionCommand "Endpoint polling" -Description $pollingDetails
+    } else {
+        Write-StateLog $StateName "Waiting for endpoint to be ready: $Uri" "INFO"
+        Write-StateLog $StateName "Will retry up to $MaxRetries times (every ${RetryInterval}s), need $SuccessfulRetries successful checks, max ${MaxTimeSeconds}s total" "INFO"
+    }
+    
+    $finalSuccess = $false
     
     do {
         $attempt++
         $elapsed = [int]((Get-Date) - $startTime).TotalSeconds
         
-        Write-StateLog $StateName "Attempt $attempt/$MaxRetries - checking endpoint... (elapsed: ${elapsed}s)" "INFO"
+        # Support both logging modes for backward compatibility
+        if ($script:LoggingMode -eq "StateMachine") {
+            # We'll just report the final result, not each individual attempt
+        } else {
+            Write-StateLog $StateName "Attempt $attempt/$MaxRetries - checking endpoint... (elapsed: ${elapsed}s)" "INFO"
+        }
         
         $success = Test-WebEndpoint -Uri $Uri -StateName $StateName
         
         if ($success) {
             $successCount++
-            Write-StateLog $StateName "✓ Endpoint check passed ($successCount/$SuccessfulRetries successful checks)" "SUCCESS"
+            
+            # Support both logging modes for backward compatibility
+            if ($script:LoggingMode -eq "StateMachine") {
+                # We'll just report the final result
+            } else {
+                Write-StateLog $StateName "✓ Endpoint check passed ($successCount/$SuccessfulRetries successful checks)" "SUCCESS"
+            }
             
             if ($successCount -ge $SuccessfulRetries) {
-                Write-StateLog $StateName "✓ Endpoint $Uri is ready! ($successCount successful checks in ${elapsed}s)" "SUCCESS"
+                # Support both logging modes for backward compatibility
+                if ($script:LoggingMode -eq "StateMachine") {
+                    # Complete the polling action successfully
+                    Complete-StateAction -StateName $StateName -ActionId $actionId -Success $true
+                } else {
+                    Write-StateLog $StateName "✓ Endpoint $Uri is ready! ($successCount successful checks in ${elapsed}s)" "SUCCESS"
+                }
+                
+                $finalSuccess = $true
                 return $true
             }
         } else {
             $successCount = 0  # Reset on failure
-            Write-StateLog $StateName "✗ Endpoint check failed" "WARN"
+            
+            # Support both logging modes for backward compatibility
+            if ($script:LoggingMode -eq "StateMachine") {
+                # We'll just report the final result
+            } else {
+                Write-StateLog $StateName "✗ Endpoint check failed" "WARN"
+            }
         }
         
         # Check if we have exceeded time limit
         if ($elapsed -ge $MaxTimeSeconds) {
-            Write-StateLog $StateName "✗ Endpoint $Uri failed to be ready within $MaxTimeSeconds seconds" "ERROR"
+            # Support both logging modes for backward compatibility
+            if ($script:LoggingMode -eq "StateMachine") {
+                # Complete the polling action with failure
+                Complete-StateAction -StateName $StateName -ActionId $actionId -Success $false -ErrorMessage "Timed out after ${elapsed}s"
+            } else {
+                Write-StateLog $StateName "✗ Endpoint $Uri failed to be ready within $MaxTimeSeconds seconds" "ERROR"
+            }
+            
+            $finalSuccess = $false
             return $false
         }
         
         # Check if we have exceeded retry limit
         if ($attempt -ge $MaxRetries) {
-            Write-StateLog $StateName "✗ Endpoint $Uri failed to be ready after $MaxRetries attempts" "ERROR"
+            # Support both logging modes for backward compatibility
+            if ($script:LoggingMode -eq "StateMachine") {
+                # Complete the polling action with failure
+                Complete-StateAction -StateName $StateName -ActionId $actionId -Success $false -ErrorMessage "Max retries ($MaxRetries) exceeded"
+            } else {
+                Write-StateLog $StateName "✗ Endpoint $Uri failed to be ready after $MaxRetries attempts" "ERROR"
+            }
+            
+            $finalSuccess = $false
             return $false
         }
         
         # Wait before next attempt
         if ($attempt -lt $MaxRetries -and $elapsed -lt $MaxTimeSeconds) {
-            Write-StateLog $StateName "Waiting ${RetryInterval}s before next attempt..." "INFO"
+            # Support both logging modes for backward compatibility
+            if ($script:LoggingMode -eq "StateMachine") {
+                # No need to log this in state machine mode
+            } else {
+                Write-StateLog $StateName "Waiting ${RetryInterval}s before next attempt..." "INFO"
+            }
+            
             Start-Sleep $RetryInterval
         }
         
@@ -211,8 +302,15 @@ function Test-ContinueAfter {
         if ($StateConfig.readiness.maxTimeSeconds) { $MaxTimeSeconds = $StateConfig.readiness.maxTimeSeconds }
     }
     
-    Write-StateLog $StateName "Waiting for $StateName to be ready..." "INFO"
-    Write-StateLog $StateName "Will retry up to $MaxRetries times (every ${RetryInterval}s), need $SuccessfulRetries successful checks, max ${MaxTimeSeconds}s total" "INFO"
+    # Support both logging modes for backward compatibility
+    if ($script:LoggingMode -eq "StateMachine") {
+        # Create a "polling" action for the command check
+        $pollingDetails = "Polling command: $Command (max $MaxRetries tries, ${RetryInterval}s interval, need $SuccessfulRetries successes, timeout ${MaxTimeSeconds}s)"
+        $actionId = Start-StateAction -StateName $StateName -ActionType "Command" -ActionCommand "Command polling" -Description $pollingDetails
+    } else {
+        Write-StateLog $StateName "Waiting for $StateName to be ready..." "INFO"
+        Write-StateLog $StateName "Will retry up to $MaxRetries times (every ${RetryInterval}s), need $SuccessfulRetries successful checks, max ${MaxTimeSeconds}s total" "INFO"
+    }
     
     # Check if this is an endpoint check
     $isEndpointCheck = $null -ne $StateConfig.readiness.endpoint
@@ -222,7 +320,12 @@ function Test-ContinueAfter {
         $attempt++
         $elapsed = [int]((Get-Date) - $startTime).TotalSeconds
         
-        Write-StateLog $StateName "Attempt $attempt/$MaxRetries - checking $StateName status... (elapsed: ${elapsed}s)" "INFO"
+        # Support both logging modes for backward compatibility
+        if ($script:LoggingMode -eq "StateMachine") {
+            # We'll just report the final result, not each individual attempt
+        } else {
+            Write-StateLog $StateName "Attempt $attempt/$MaxRetries - checking $StateName status... (elapsed: ${elapsed}s)" "INFO"
+        }
         
         $success = $false
         
@@ -239,52 +342,109 @@ function Test-ContinueAfter {
                     $outputString = $output | Out-String
                     if (Test-OutputForErrors -OutputString $outputString) {
                         $success = $false
-                        Write-StateLog $StateName "⚠ Check detected errors in output" "WARN"
-                        if ($global:Verbose) {
-                            Write-StateLog $StateName "Error output: $($outputString.Trim())" "DEBUG"
+                        
+                        # Support both logging modes for backward compatibility
+                        if ($script:LoggingMode -eq "StateMachine") {
+                            # We'll just report the final result
+                        } else {
+                            Write-StateLog $StateName "⚠ Check detected errors in output" "WARN"
+                            if ($global:Verbose) {
+                                Write-StateLog $StateName "Error output: $($outputString.Trim())" "DEBUG"
+                            }
                         }
                     }
                 } else {
                     if ($global:Verbose -and $output) {
                         $outputString = $output | Out-String
-                        Write-StateLog $StateName "Error details: $($outputString.Trim())" "DEBUG"
+                        
+                        # Support both logging modes for backward compatibility
+                        if ($script:LoggingMode -eq "StateMachine") {
+                            # We'll just report the final result
+                        } else {
+                            Write-StateLog $StateName "Error details: $($outputString.Trim())" "DEBUG"
+                        }
                     }
                 }
             }
             catch {
                 $success = $false
-                Write-StateLog $StateName "✗ Check exception: $($_.Exception.Message)" "WARN"
+                
+                # Support both logging modes for backward compatibility
+                if ($script:LoggingMode -eq "StateMachine") {
+                    # We'll just report the final result
+                } else {
+                    Write-StateLog $StateName "✗ Check exception: $($_.Exception.Message)" "WARN"
+                }
             }
         }
         
         if ($success) {
             $successCount++
-            Write-StateLog $StateName "✓ Check passed ($successCount/$SuccessfulRetries successful checks)" "SUCCESS"
+            
+            # Support both logging modes for backward compatibility
+            if ($script:LoggingMode -eq "StateMachine") {
+                # We'll just report the final result
+            } else {
+                Write-StateLog $StateName "✓ Check passed ($successCount/$SuccessfulRetries successful checks)" "SUCCESS"
+            }
             
             if ($successCount -ge $SuccessfulRetries) {
-                Write-StateLog $StateName "✓ $StateName is ready! ($successCount successful checks in ${elapsed}s)" "SUCCESS"
+                # Support both logging modes for backward compatibility
+                if ($script:LoggingMode -eq "StateMachine") {
+                    # Complete the polling action successfully
+                    Complete-StateAction -StateName $StateName -ActionId $actionId -Success $true
+                } else {
+                    Write-StateLog $StateName "✓ $StateName is ready! ($successCount successful checks in ${elapsed}s)" "SUCCESS"
+                }
+                
                 return $true
             }
         } else {
             $successCount = 0  # Reset on failure
-            Write-StateLog $StateName "✗ Check failed" "WARN"
+            
+            # Support both logging modes for backward compatibility
+            if ($script:LoggingMode -eq "StateMachine") {
+                # We'll just report the final result
+            } else {
+                Write-StateLog $StateName "✗ Check failed" "WARN"
+            }
         }
         
         # Check if we have exceeded time limit
         if ($elapsed -ge $MaxTimeSeconds) {
-            Write-StateLog $StateName "✗ $StateName failed to be ready within $MaxTimeSeconds seconds" "ERROR"
+            # Support both logging modes for backward compatibility
+            if ($script:LoggingMode -eq "StateMachine") {
+                # Complete the polling action with failure
+                Complete-StateAction -StateName $StateName -ActionId $actionId -Success $false -ErrorMessage "Timed out after ${elapsed}s"
+            } else {
+                Write-StateLog $StateName "✗ $StateName failed to be ready within $MaxTimeSeconds seconds" "ERROR"
+            }
+            
             return $false
         }
         
         # Check if we have exceeded retry limit
         if ($attempt -ge $MaxRetries) {
-            Write-StateLog $StateName "✗ $StateName failed to be ready after $MaxRetries attempts" "ERROR"
+            # Support both logging modes for backward compatibility
+            if ($script:LoggingMode -eq "StateMachine") {
+                # Complete the polling action with failure
+                Complete-StateAction -StateName $StateName -ActionId $actionId -Success $false -ErrorMessage "Max retries ($MaxRetries) exceeded"
+            } else {
+                Write-StateLog $StateName "✗ $StateName failed to be ready after $MaxRetries attempts" "ERROR"
+            }
+            
             return $false
         }
         
         # Wait before next attempt
         if ($attempt -lt $MaxRetries -and $elapsed -lt $MaxTimeSeconds) {
-            Write-StateLog $StateName "Waiting ${RetryInterval}s before next attempt..." "INFO"
+            # Support both logging modes for backward compatibility
+            if ($script:LoggingMode -eq "StateMachine") {
+                # No need to log this in state machine mode
+            } else {
+                Write-StateLog $StateName "Waiting ${RetryInterval}s before next attempt..." "INFO"
+            }
+            
             Start-Sleep $RetryInterval
         }
         
@@ -322,12 +482,23 @@ function Test-PreCheck {
         [hashtable]$StateConfig
     )
     
-    Write-StateLog $StateName "Checking if $StateName is already ready using command..." "INFO"
+    # Support both logging modes for backward compatibility
+    if ($script:LoggingMode -eq "StateMachine") {
+        # The main state check already logs this, so we don't need to log again
+        # State machine logging occurs in the main script via Write-StateCheck
+    } else {
+        Write-StateLog $StateName "Checking if $StateName is already ready using command..." "INFO"
+    }
     
     # Default command execution
     try {
         if ($global:Verbose) {
-            Write-StateLog $StateName "Check command: $CheckCommand" "DEBUG"
+            # Support both logging modes for backward compatibility
+            if ($script:LoggingMode -eq "StateMachine") {
+                # No need for verbose debug logs in state machine mode
+            } else {
+                Write-StateLog $StateName "Check command: $CheckCommand" "DEBUG"
+            }
         }
         
         # Use try-catch instead of job for better exit code handling
@@ -348,29 +519,51 @@ function Test-PreCheck {
         $outputString = $output | Out-String
         
         if ($success -and -not (Test-OutputForErrors -OutputString $outputString)) {
-            Write-StateLog $StateName "✓ State $StateName is already ready, skipping actions" "SUCCESS"
-            if ($global:Verbose) {
-                $lines = ($outputString -split "`n").Count
-                Write-StateLog $StateName "Check returned $lines lines of output (success)" "DEBUG"
+            # Support both logging modes for backward compatibility
+            if ($script:LoggingMode -eq "StateMachine") {
+                # Success will be reported by the main script via Write-StateCheckResult
+            } else {
+                Write-StateLog $StateName "✓ State $StateName is already ready, skipping actions" "SUCCESS"
+                if ($global:Verbose) {
+                    $lines = ($outputString -split "`n").Count
+                    Write-StateLog $StateName "Check returned $lines lines of output (success)" "DEBUG"
+                }
             }
+            
             return $true
         } else {
             if ($global:Verbose) {
-                if (-not $success) {
-                    Write-StateLog $StateName "Check failed (Exit Code: $exitCode)" "DEBUG"
+                # Support both logging modes for backward compatibility
+                if ($script:LoggingMode -eq "StateMachine") {
+                    # Detailed failure will be reported by the main script
                 } else {
-                    Write-StateLog $StateName "Check completed but output contains errors" "DEBUG"
+                    if (-not $success) {
+                        Write-StateLog $StateName "Check failed (Exit Code: $exitCode)" "DEBUG"
+                    } else {
+                        Write-StateLog $StateName "Check completed but output contains errors" "DEBUG"
+                    }
                 }
             }
         }
     }
     catch {
         if ($global:Verbose) {
-            Write-StateLog $StateName "Check failed with exception: $($_.Exception.Message)" "DEBUG"
+            # Support both logging modes for backward compatibility
+            if ($script:LoggingMode -eq "StateMachine") {
+                # Exception will be reported by the main script
+            } else {
+                Write-StateLog $StateName "Check failed with exception: $($_.Exception.Message)" "DEBUG"
+            }
         }
     }
     
-    Write-StateLog $StateName "Pre-check failed or detected issues, proceeding with actions" "INFO"
+    # Support both logging modes for backward compatibility
+    if ($script:LoggingMode -eq "StateMachine") {
+        # The failure will be reported by the main script via Write-StateCheckResult
+    } else {
+        Write-StateLog $StateName "Pre-check failed or detected issues, proceeding with actions" "INFO"
+    }
+    
     return $false
 }
 

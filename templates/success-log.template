@@ -1,0 +1,35 @@
+[17:21:51] [INFO] ▶️ Claude Task Runner (Target: nodeReady)
+[17:21:51] [INFO] 📋 Configuration loaded from claude.yml
+
+STATE TRANSITIONS:
+┌─ STATE: 🔄 dockerStartup
+│  ├─ Dependencies: none
+│  ├─ Check: 🔍 Command check (docker info)
+│  └─ Result: ✅ READY (already ready via command check)
+
+┌─ STATE: 🔄 dockerReady
+│  ├─ Dependencies: dockerStartup ✓
+│  ├─ Check: 🔍 Command check (docker info)
+│  └─ Result: ✅ READY (already ready via command check)
+
+┌─ STATE: 🔄 apiReady
+│  ├─ Dependencies: dockerReady ✓
+│  ├─ Check: 🔍 Endpoint check (https://localhost:5001/healthcheck)
+│  └─ Result: ✅ READY (endpoint status: 200 OK)
+
+┌─ STATE: 🔄 nodeReady
+│  ├─ Dependencies: apiReady ✓
+│  ├─ Actions: ⏳ EXECUTING
+│  │  ├─ Command: Set-NodeVersion -Version v22.16.0
+│  │  │  └─ Status: ✓ SUCCESS (0.3s)
+│  │  ├─ Command: node --version
+│  │  │  └─ Status: ✓ SUCCESS (0.4s)
+│  │  ├─ Command: npm install
+│  │  │  └─ Status: ✓ SUCCESS (6.1s)
+│  │  └─ Command: npm run dev (Starting Identity SPA)
+│  │     └─ Status: ✓ SUCCESS (0.2s)
+│  └─ Result: ✅ COMPLETED (7.0s)
+
+SUMMARY:
+✅ Successfully processed: dockerStartup, dockerReady, apiReady, nodeReady
+⏱️ Total time: 11.0s

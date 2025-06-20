@@ -660,3 +660,8 @@ function Write-StateSummary {
     $script:ProcessedStates = @{}
     $script:TotalStartTime = $null
 }
+
+# Export module members
+Export-ModuleMember -Function Set-LogPath, Set-LoggingMode, Write-Log, Write-StateLog, Get-StateIcon, 
+                     Start-StateTransitions, Start-StateProcessing, Write-StateCheck, Write-StateCheckResult,
+                     Start-StateActions, Start-StateAction, Complete-StateAction, Complete-State, Write-StateSummary
