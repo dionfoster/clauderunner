@@ -150,9 +150,8 @@ Initializes the state machine visualization and writes the header.
 function Start-StateTransitions {
     if (-not $script:StateTransitionStarted) {
         $script:TotalStartTime = Get-Date
-        
-        Write-Host "`nSTATE TRANSITIONS:" -ForegroundColor Cyan
-        Write-Host "" # Add an extra line break
+          Write-Host "`nSTATE TRANSITIONS:" -ForegroundColor Cyan
+        Write-Host ""  # Single line break after header
         $script:StateTransitionStarted = $true
         
         # Log to file
@@ -198,9 +197,10 @@ function Start-StateProcessing {
     } else { 
         "Dependencies: none" 
     }
-    
-    # Add empty line before new state for better readability
-    Write-Host ""
+      # Only add empty line before state if it's not the first state
+    if ($script:ProcessedStates.Count -gt 1) {
+        Write-Host ""
+    }
     Write-Host "┌─ STATE: $($script:StatusIcons['Processing']) $stateIcon$StateName" -ForegroundColor Cyan
     Write-Host "│  ├─ $depText" -ForegroundColor Gray
     
@@ -511,10 +511,8 @@ function Complete-State {
     $status = if ($Success) { $script:StatusIcons['Completed'] } else { $script:StatusIcons['Failed'] }
     $resultText = if ($Success) { "COMPLETED" } else { "FAILED" }
     $resultColor = if ($Success) { "Green" } else { "Red" }
-    
-    if ($Success) {
+      if ($Success) {
         Write-Host "│  └─ Result: $status $resultText ($duration`s)" -ForegroundColor $resultColor
-        Write-Host ""
         
         # Update state tracking
         $script:ProcessedStates[$StateName]["Status"] = "Completed"
@@ -531,11 +529,9 @@ function Complete-State {
         if ($ErrorMessage) {
             Write-Host "│     └─ Error: $ErrorMessage" -ForegroundColor Red
             
-            # Log to file
-            $logMessage = "$(Get-Date -Format 'HH:mm:ss') [ERROR] - │     └─ Error: $ErrorMessage"
+            # Log to file            $logMessage = "$(Get-Date -Format 'HH:mm:ss') [ERROR] - │     └─ Error: $ErrorMessage"
             $logMessage | Out-File -FilePath $script:LogPath -Append -Encoding UTF8
         }
-        Write-Host ""
         
         # Update state tracking
         $script:ProcessedStates[$StateName]["Status"] = "Failed"

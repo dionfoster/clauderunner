@@ -59,11 +59,9 @@ function Get-Configuration {
         Write-Log "Please create a claude.yml file with your state configuration." "INFO"
         exit 1
     }
-    
-    try {
+      try {
         $yamlContent = Get-Content $script:ConfigPath -Raw -Encoding UTF8
         $config = ConvertFrom-Yaml $yamlContent
-        Write-Log "Configuration loaded successfully from $script:ConfigPath" "SUCCESS"
         return $config
     }
     catch {

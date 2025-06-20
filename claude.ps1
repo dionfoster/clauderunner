@@ -197,8 +197,8 @@ function Invoke-State {
 
 # Main execution
 try {
-    Write-Log "[INFO] ▶️ Claude Task Runner (Target: $Target)" "SYSTEM"
-    Write-Log "[INFO] 📋 Configuration loaded from $script:ConfigPath" "SYSTEM"
+    Write-Log "▶️ Claude Task Runner (Target: $Target)" "SYSTEM"
+    Write-Log "📋 Configuration loaded from $script:ConfigPath" "SYSTEM"
     
     Configuration\Initialize-Environment
     $config = Get-Configuration
