@@ -1,0 +1,34 @@
+# claude.yml - Simplified launch method specification
+states:
+  dockerStartup:
+    check: docker info
+    run:
+      - app: 'C:\Program Files\Docker\Docker\Docker Desktop.exe'
+        desc: "Starting Docker Desktop"
+    wait: docker info
+
+  dockerReady:
+    needs: [dockerStartup]
+    check: docker info
+    run:
+      - docker start postgres
+      - docker start rabbitmq
+
+  apiReady:
+    needs: [dockerReady]
+    run:
+      - command: dotnet run
+        dir: "C:\\github\\Identity.Api\\src\\Identity.Api"
+        window: true
+        desc: "Starting Identity API"
+
+  nodeReady:
+    needs: [apiReady]
+    run:
+      - Set-NodeVersion -Version v22.16.0
+      - command: npm install
+        dir: "C:\\github\\Identity.Spa"
+      - command: npm run dev
+        dir: "C:\\github\\Identity.Spa"
+        window: true
+        desc: "Starting Identity SPA"
