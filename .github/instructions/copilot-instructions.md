@@ -63,3 +63,7 @@ applyTo: '**'
 - Document any required dependencies or prerequisites
 - Explain the reasoning behind complex logic
 
+## New Ideas
+- If there is a completely new idea or approach, ask for confirmation before proceeding
+- Provide a clear explanation of the benefits and trade-offs of the new approach
+- Ensure that new ideas align with the overall project philosophy and standards
