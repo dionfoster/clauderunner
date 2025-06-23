@@ -18,64 +18,73 @@ AfterAll {
     Cleanup-TestEnvironment
 }
 
-Describe "CommandExecution Module" {    Context "Invoke-DockerCommand" {
-        It "Executes a Docker command successfully" {
-            # Arrange - Mock at the docker command level
-            Mock docker { return "Docker command executed" } -ModuleName CommandExecution
+Describe "CommandExecution Module" {    Context "Test-OutputForErrors" {
+        It "Returns true when output contains error indicators" {
+            # Arrange
+            $errorOutput = "Error: Something went wrong"
             
             # Act
-            $result = Invoke-DockerCommand -Command "test-command"
+            $result = Test-OutputForErrors -OutputString $errorOutput
             
             # Assert
-            $result | Should -Be "Docker command executed"
+            $result | Should -BeTrue
         }
         
-        It "Handles Docker command errors" {
-            # Arrange - Mock docker to throw an error
-            Mock docker { throw "Docker command failed" } -ModuleName CommandExecution
-            
-            # Act & Assert
-            { Invoke-DockerCommand -Command "invalid-command" } | Should -Throw "Docker command failed: Docker command failed"
-        }
-    }
-      Context "Start-DockerContainer" {
-        It "Starts a Docker container successfully" {
+        It "Returns false when output does not contain error indicators" {
             # Arrange
-            Mock Invoke-DockerCommand { return "Container started" } -ModuleName CommandExecution
+            $normalOutput = "Operation completed successfully"
             
             # Act
-            $result = Start-DockerContainer -ImageName "test-image" -ApiPort 8000
+            $result = Test-OutputForErrors -OutputString $normalOutput
             
             # Assert
-            $result | Should -Be "Container started"
+            $result | Should -BeFalse
         }
     }
-      Context "Stop-DockerContainer" {
-        It "Stops a Docker container by name pattern" {
+    
+    Context "Get-ExecutableAndArgs" {
+        It "Resolves a command and returns executable with arguments" {
             # Arrange
-            $mockContainers = @(
-                "container1 anthropic-api",
-                "container2 other-container"
-            )
-            
-            Mock Invoke-DockerCommand { return $mockContainers } -ModuleName CommandExecution -ParameterFilter { $Command -like "ps*" }
-            Mock Invoke-DockerCommand { return "Container stopped" } -ModuleName CommandExecution -ParameterFilter { $Command -like "stop*" }
+            $command = "npm install"
             
             # Act
-            Stop-DockerContainer -NamePattern "anthropic-api"
+            $result = Get-ExecutableAndArgs -Command $command
             
-            # Assert - Just verify no errors occur, as we've mocked all dependencies
-            $true | Should -BeTrue
+            # Assert
+            $result.Count | Should -Be 2
+            $result[0] | Should -Be "npm"
+            $result[1] | Should -Be "install"
+        }
+    }
+      Context "Build-StartProcessCommand" {
+        It "Builds a command string for Start-Process" {
+            # Arrange
+            $executable = "npm"
+            $arguments = "install"
+            $windowStyle = "Hidden"
+            
+            # Act
+            $result = Build-StartProcessCommand -Executable $executable -Arguments $arguments -WindowStyle $windowStyle
+            
+            # Assert
+            $result | Should -Match "Start-Process -FilePath `"npm`" -ArgumentList `"install`" -WindowStyle Hidden"
+        }
+    }
+      Context "Resolve-CommandAlias" {
+        It "Resolves known command alias" {
+            # Act
+            $result = Resolve-CommandAlias -Command "npm install"
+            
+            # Assert
+            $result | Should -Be "npm install"
         }
         
-        It "Does nothing when no matching containers found" {
-            # Arrange
-            Mock Invoke-DockerCommand { return @() } -ModuleName CommandExecution
-            
+        It "Returns original command for unknown alias" {
             # Act
-            Stop-DockerContainer -NamePattern "nonexistent-container"
+            $result = Resolve-CommandAlias -Command "unknown-command arg1 arg2"
             
-            # Assert - Just verify no errors occur, as we've mocked all dependencies
-            $true | Should -BeTrue        }
+            # Assert
+            $result | Should -Be "unknown-command arg1 arg2"
+        }
     }
 }
