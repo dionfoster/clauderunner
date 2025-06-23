@@ -140,30 +140,59 @@ Describe "State Machine Visualization" {
     }
     
     Context "Start-StateTransitions" {
+        BeforeEach {
+            # Reset state machine variables before test
+            Reset-StateMachineVariables
+            
+            # Import module with -Force to ensure fresh state
+            $loggingModule = Import-Module "$PSScriptRoot\..\modules\Logging.psm1" -Force -PassThru
+            
+            # Update module script variables from our global test variables
+            Update-ModuleScriptVariables -Module $loggingModule
+            
+            # Ensure log file is clean
+            Reset-LogFile
+        }
+        
         It "Initializes state machine visualization" {
             # Act
             Start-StateTransitions
             
-            # Assert
-            $script:StateTransitionStarted | Should -BeTrue
-            $script:TotalStartTime | Should -Not -BeNullOrEmpty
+            # Assert - use Get-Variable to access script-scoped variables
+            $stateStarted = & $loggingModule { $script:StateTransitionStarted }
+            $stateStarted | Should -BeTrue
             
-            # Check log file
+            $startTime = & $loggingModule { $script:TotalStartTime }
+            $startTime | Should -Not -BeNullOrEmpty
+              # Check log file
             $logContent = Get-Content -Path $script:TestLogPath -Raw
-            $logContent | Should -Match "\[\d{2}:\d{2}:\d{2}\] \[INFO\] - STATE TRANSITIONS:"
+            $logContent | Should -Match "\d{2}:\d{2}:\d{2} \[INFO\] - STATE TRANSITIONS:"
         }
     }
-    
-    Context "Start-StateProcessing" {
+      Context "Start-StateProcessing" {
+        BeforeEach {
+            # Import module with -Force to ensure fresh state
+            $loggingModule = Import-Module "$PSScriptRoot\..\modules\Logging.psm1" -Force -PassThru
+            
+            # Update module script variables from our global test variables
+            Update-ModuleScriptVariables -Module $loggingModule
+            
+            # Ensure log file is clean
+            Reset-LogFile
+        }
+        
         It "Starts processing a state with no dependencies" {
             # Act
             Start-StateProcessing -StateName "TestState"
             
             # Assert
-            $script:StateStartTimes["TestState"] | Should -Not -BeNullOrEmpty
-            $script:ProcessedStates["TestState"] | Should -Not -BeNullOrEmpty
-            $script:ProcessedStates["TestState"]["Status"] | Should -Be "Processing"
-            $script:ProcessedStates["TestState"]["Dependencies"].Count | Should -Be 0
+            $stateStartTimes = & $loggingModule { $script:StateStartTimes }
+            $stateStartTimes["TestState"] | Should -Not -BeNullOrEmpty
+            
+            $processedStates = & $loggingModule { $script:ProcessedStates }
+            $processedStates["TestState"] | Should -Not -BeNullOrEmpty
+            $processedStates["TestState"]["Status"] | Should -Be "Processing"
+            $processedStates["TestState"]["Dependencies"].Count | Should -Be 0
             
             # Check log file
             $logContent = Get-Content -Path $script:TestLogPath -Raw
@@ -177,19 +206,30 @@ Describe "State Machine Visualization" {
             Start-StateProcessing -StateName "TestState" -Dependencies @("Dep1", "Dep2")
             
             # Assert
-            $script:StateStartTimes["TestState"] | Should -Not -BeNullOrEmpty
-            $script:ProcessedStates["TestState"]["Dependencies"].Count | Should -Be 2
-            $script:ProcessedStates["TestState"]["Dependencies"] | Should -Contain "Dep1"
-            $script:ProcessedStates["TestState"]["Dependencies"] | Should -Contain "Dep2"
+            $stateStartTimes = & $loggingModule { $script:StateStartTimes }
+            $stateStartTimes["TestState"] | Should -Not -BeNullOrEmpty
+            
+            $processedStates = & $loggingModule { $script:ProcessedStates }
+            $processedStates["TestState"]["Dependencies"].Count | Should -Be 2
+            $processedStates["TestState"]["Dependencies"] | Should -Contain "Dep1"
+            $processedStates["TestState"]["Dependencies"] | Should -Contain "Dep2"
             
             # Check log file
             $logContent = Get-Content -Path $script:TestLogPath -Raw
             $logContent | Should -Match "│  ├─ Dependencies: Dep1 ✓, Dep2 ✓"
         }
     }
-    
-    Context "Complete-State" {
+      Context "Complete-State" {
         BeforeEach {
+            # Import module with -Force to ensure fresh state
+            $loggingModule = Import-Module "$PSScriptRoot\..\modules\Logging.psm1" -Force -PassThru
+            
+            # Update module script variables from our global test variables
+            Update-ModuleScriptVariables -Module $loggingModule
+            
+            # Ensure log file is clean
+            Reset-LogFile
+            
             # Setup state
             Start-StateProcessing -StateName "TestState"
         }
@@ -198,27 +238,25 @@ Describe "State Machine Visualization" {
             # Act
             Complete-State -StateName "TestState" -Success $true
             
-            # Assert
-            $script:ProcessedStates["TestState"]["Status"] | Should -Be "Completed"
-            $script:ProcessedStates["TestState"]["Duration"] | Should -Not -BeNullOrEmpty
-            
-            # Check log file
+            # Assert - use the module's script variables
+            $processedStates = & $loggingModule { $script:ProcessedStates }
+            $processedStates["TestState"]["Status"] | Should -Be "Completed"
+            $processedStates["TestState"]["Duration"] | Should -Not -BeNullOrEmpty            # Check log file
             $logContent = Get-Content -Path $script:TestLogPath -Raw
-            $logContent | Should -Match "│  └─ Result: ✅ COMPLETED \(\d+\.\d+s\)"
+            $logContent | Should -Match "\d{2}:\d{2}:\d{2} \[SUCCESS\] - │  └─ Result: ✅ COMPLETED \(\d+s\)"
         }
         
         It "Marks a state as failed" {
             # Act
             Complete-State -StateName "TestState" -Success $false -ErrorMessage "Test error"
             
-            # Assert
-            $script:ProcessedStates["TestState"]["Status"] | Should -Be "Failed"
-            $script:ProcessedStates["TestState"]["ErrorMessage"] | Should -Be "Test error"
-            
-            # Check log file
+            # Assert - use the module's script variables
+            $processedStates = & $loggingModule { $script:ProcessedStates }
+            $processedStates["TestState"]["Status"] | Should -Be "Failed"
+            $processedStates["TestState"]["ErrorMessage"] | Should -Be "Test error"            # Check log file
             $logContent = Get-Content -Path $script:TestLogPath -Raw
-            $logContent | Should -Match "│  └─ Result: ❌ FAILED \(\d+\.\d+s\)"
-            $logContent | Should -Match "│     └─ Error: Test error"
+            $logContent | Should -Match "\d{2}:\d{2}:\d{2} \[ERROR\] - │  └─ Result: ❌ FAILED \(\d+s\)"
+            $logContent | Should -Match "\d{2}:\d{2}:\d{2} \[ERROR\] - │     └─ Error: Test error"
         }
     }
 }
