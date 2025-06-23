@@ -537,69 +537,12 @@ function Stop-DockerContainer {
     
     # Filter containers by name pattern
     $matchingContainers = $containers | Where-Object { $_ -match $NamePattern }
-    
-    # Stop each matching container
+      # Stop each matching container
     foreach ($container in $matchingContainers) {
         $containerId = $container.Split()[0]
         Invoke-DockerCommand -Command "stop $containerId"
     }
 }
 
-<#
-.SYNOPSIS
-Submits a prompt to the API and returns the response.
-
-.DESCRIPTION
-Submits a prompt to the API at the specified host and returns the response content.
-
-.PARAMETER ApiHost
-The host address of the API, including port if needed.
-
-.PARAMETER Prompt
-The prompt text to send to the API.
-
-.PARAMETER Model
-The model to use for the prompt.
-
-.PARAMETER MaxTokens
-The maximum number of tokens to generate.
-
-.OUTPUTS
-Returns the content of the API response.
-
-.EXAMPLE
-Submit-Prompt -ApiHost "localhost:8000" -Prompt "Tell me a joke" -Model "claude-2"
-#>
-function Submit-Prompt {
-    param(
-        [Parameter(Mandatory=$true)]
-        [string]$ApiHost,
-        
-        [Parameter(Mandatory=$true)]
-        [string]$Prompt,
-        
-        [Parameter(Mandatory=$true)]
-        [string]$Model,
-        
-        [Parameter(Mandatory=$false)]
-        [int]$MaxTokens = 1000
-    )
-    
-    $endpoint = "http://$ApiHost/v1/complete"
-    $body = @{
-        prompt = $Prompt
-        model = $Model
-        max_tokens_to_sample = $MaxTokens
-    } | ConvertTo-Json
-    
-    try {
-        $response = Invoke-RestMethod -Uri $endpoint -Method Post -Body $body -ContentType "application/json"
-        return $response.content
-    }
-    catch {
-        throw "Failed to submit prompt to API: $_"
-    }
-}
-
 # Export the functions
-Export-ModuleMember -Function Test-OutputForErrors, Get-ExecutableAndArgs, Build-StartProcessCommand, ConvertTo-LaunchCommand, Invoke-CommandWithTimeout, Invoke-Command, Resolve-CommandAlias, Invoke-DockerCommand, Start-DockerContainer, Stop-DockerContainer, Submit-Prompt, Invoke-DockerCommand, Start-DockerContainer, Stop-DockerContainer, Submit-Prompt
+Export-ModuleMember -Function Test-OutputForErrors, Get-ExecutableAndArgs, Build-StartProcessCommand, ConvertTo-LaunchCommand, Invoke-CommandWithTimeout, Invoke-Command, Resolve-CommandAlias, Invoke-DockerCommand, Start-DockerContainer, Stop-DockerContainer

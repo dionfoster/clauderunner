@@ -76,32 +76,6 @@ Describe "CommandExecution Module" {    Context "Invoke-DockerCommand" {
             Stop-DockerContainer -NamePattern "nonexistent-container"
             
             # Assert - Just verify no errors occur, as we've mocked all dependencies
-            $true | Should -BeTrue
-        }
-    }
-      Context "Submit-Prompt" {
-        It "Sends a prompt to the API and returns the response" {
-            # Arrange
-            $mockResponseContent = '{"content": "This is a test response"}'
-            $mockResponse = [PSCustomObject]@{
-                content = "This is a test response"
-            }
-            
-            Mock Invoke-RestMethod { return $mockResponse } -ModuleName CommandExecution
-            
-            # Act
-            $result = Submit-Prompt -ApiHost "test-host:8000" -Prompt "Test prompt" -Model "test-model"
-            
-            # Assert
-            $result | Should -Be "This is a test response"
-        }
-        
-        It "Handles API errors gracefully" {
-            # Arrange
-            Mock Invoke-RestMethod { throw "API call failed" } -ModuleName CommandExecution
-            
-            # Act & Assert
-            { Submit-Prompt -ApiHost "test-host:8000" -Prompt "Test prompt" -Model "test-model" } | Should -Throw "Failed to submit prompt to API: API call failed"
-        }
+            $true | Should -BeTrue        }
     }
 }
