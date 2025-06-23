@@ -9,14 +9,8 @@ BeforeAll {
     # Import the module to test
     Import-Module "$PSScriptRoot\..\modules\ReadinessChecks.psm1" -Force
     
-    # Mock dependencies
-    function global:Mock-CommandExists {
-        param([string]$command)
-        return $true # Always return true in tests
-    }
-    
     # Create mock for Invoke-WebRequest
-    Mock Invoke-WebRequest {
+    Mock -ModuleName ReadinessChecks Invoke-WebRequest {
         param($Uri, $Method, $TimeoutSec)
         
         if ($Uri -like "*/readiness") {
@@ -41,102 +35,198 @@ BeforeAll {
 AfterAll {
     # Clean up test environment
     Cleanup-TestEnvironment
-    
-    # Remove mock
-    Remove-Item -Path function:global:Mock-CommandExists -ErrorAction SilentlyContinue
 }
 
 Describe "ReadinessChecks Module" {
     Context "Test-DockerInstalled" {
         It "Returns true when Docker is installed (mocked)" {
             # Arrange
-            Mock Get-Command { return $true } -ParameterFilter { $Name -eq "docker" }
+            Mock -ModuleName ReadinessChecks Get-Command { return $true } -ParameterFilter { $Name -eq "docker" }
             
             # Act
             $result = Test-DockerInstalled
             
             # Assert
             $result | Should -BeTrue
+            Should -Invoke -ModuleName ReadinessChecks Get-Command -ParameterFilter { $Name -eq "docker" } -Times 1
         }
         
         It "Returns false when Docker is not installed" {
             # Arrange
-            Mock Get-Command { throw "Command not found" } -ParameterFilter { $Name -eq "docker" }
+            Mock -ModuleName ReadinessChecks Get-Command { throw "Command not found" } -ParameterFilter { $Name -eq "docker" }
             
             # Act
             $result = Test-DockerInstalled
             
             # Assert
             $result | Should -BeFalse
+            Should -Invoke -ModuleName ReadinessChecks Get-Command -ParameterFilter { $Name -eq "docker" } -Times 1
         }
     }
     
     Context "Test-DockerRunning" {
         It "Returns true when Docker is running (mocked)" {
             # Arrange
-            Mock docker { return "Docker is running" } -ParameterFilter { $args -contains "info" }
+            Mock -ModuleName ReadinessChecks Invoke-Expression { return "Docker is running" } -ParameterFilter { $Command -like "*docker info*" }
             
             # Act
             $result = Test-DockerRunning
             
             # Assert
             $result | Should -BeTrue
+            Should -Invoke -ModuleName ReadinessChecks Invoke-Expression -ParameterFilter { $Command -like "*docker info*" } -Times 1
         }
         
         It "Returns false when Docker is not running" {
             # Arrange
-            Mock docker { throw "Docker is not running" } -ParameterFilter { $args -contains "info" }
+            Mock -ModuleName ReadinessChecks Invoke-Expression { throw "Docker is not running" } -ParameterFilter { $Command -like "*docker info*" }
             
             # Act
             $result = Test-DockerRunning
             
             # Assert
             $result | Should -BeFalse
+            Should -Invoke -ModuleName ReadinessChecks Invoke-Expression -ParameterFilter { $Command -like "*docker info*" } -Times 1
         }
     }
     
     Context "Test-NodeJSInstalled" {
         It "Returns true when Node.js is installed (mocked)" {
             # Arrange
-            Mock Get-Command { return $true } -ParameterFilter { $Name -eq "node" }
+            Mock -ModuleName ReadinessChecks Get-Command { return $true } -ParameterFilter { $Name -eq "node" }
             
             # Act
             $result = Test-NodeJSInstalled
             
             # Assert
             $result | Should -BeTrue
+            Should -Invoke -ModuleName ReadinessChecks Get-Command -ParameterFilter { $Name -eq "node" } -Times 1
         }
         
         It "Returns false when Node.js is not installed" {
             # Arrange
-            Mock Get-Command { throw "Command not found" } -ParameterFilter { $Name -eq "node" }
+            Mock -ModuleName ReadinessChecks Get-Command { throw "Command not found" } -ParameterFilter { $Name -eq "node" }
             
             # Act
             $result = Test-NodeJSInstalled
             
             # Assert
             $result | Should -BeFalse
+            Should -Invoke -ModuleName ReadinessChecks Get-Command -ParameterFilter { $Name -eq "node" } -Times 1
         }
     }
     
     Context "Test-ApiReady" {
         It "Returns true when API is ready (mocked)" {
+            # Arrange
+            Mock -ModuleName ReadinessChecks Invoke-WebRequest {
+                return @{
+                    StatusCode = 200
+                    Content = '{"status":"ready"}'
+                }
+            } -ParameterFilter { $Uri -like "*/readiness" }
+            
             # Act
             $result = Test-ApiReady -ApiHost "test-host:8000"
             
             # Assert
             $result | Should -BeTrue
+            Should -Invoke -ModuleName ReadinessChecks Invoke-WebRequest -ParameterFilter { $Uri -like "*/readiness" } -Times 1
         }
         
         It "Returns false when API is not ready" {
             # Arrange
-            Mock Invoke-WebRequest { throw "Connection failed" }
+            Mock -ModuleName ReadinessChecks Invoke-WebRequest { throw "Connection failed" } -ParameterFilter { $Uri -like "*/readiness" }
             
             # Act
             $result = Test-ApiReady -ApiHost "test-host:8000"
             
             # Assert
             $result | Should -BeFalse
+            Should -Invoke -ModuleName ReadinessChecks Invoke-WebRequest -ParameterFilter { $Uri -like "*/readiness" } -Times 1
+        }
+    }
+    
+    Context "Test-CommandAvailable" {
+        It "Returns true when a command is available" {
+            # Arrange
+            Mock -ModuleName ReadinessChecks Get-Command { return $true } -ParameterFilter { $Name -eq "testcmd" }
+            
+            # Act
+            $result = Test-CommandAvailable -CommandName "testcmd"
+            
+            # Assert
+            $result | Should -BeTrue
+            Should -Invoke -ModuleName ReadinessChecks Get-Command -ParameterFilter { $Name -eq "testcmd" } -Times 1
+        }
+        
+        It "Returns false when a command is not available" {
+            # Arrange
+            Mock -ModuleName ReadinessChecks Get-Command { throw "Command not found" } -ParameterFilter { $Name -eq "nonexistentcmd" }
+            
+            # Act
+            $result = Test-CommandAvailable -CommandName "nonexistentcmd"
+            
+            # Assert
+            $result | Should -BeFalse
+            Should -Invoke -ModuleName ReadinessChecks Get-Command -ParameterFilter { $Name -eq "nonexistentcmd" } -Times 1
+        }
+    }
+    
+    Context "Test-ServiceRunning" {
+        It "Returns true when a service is running" {
+            # Arrange
+            Mock -ModuleName ReadinessChecks Invoke-Expression { return "Service is running" } -ParameterFilter { $Command -eq "test-service status" }
+            
+            # Act
+            $result = Test-ServiceRunning -Command "test-service status"
+            
+            # Assert
+            $result | Should -BeTrue
+            Should -Invoke -ModuleName ReadinessChecks Invoke-Expression -ParameterFilter { $Command -eq "test-service status" } -Times 1
+        }
+        
+        It "Returns false when a service is not running" {
+            # Arrange
+            Mock -ModuleName ReadinessChecks Invoke-Expression { throw "Service is not running" } -ParameterFilter { $Command -eq "test-service status" }
+            
+            # Act
+            $result = Test-ServiceRunning -Command "test-service status"
+            
+            # Assert
+            $result | Should -BeFalse
+            Should -Invoke -ModuleName ReadinessChecks Invoke-Expression -ParameterFilter { $Command -eq "test-service status" } -Times 1
+        }
+    }
+    
+    Context "Test-EndpointPath" {
+        It "Returns true when an endpoint is ready" {
+            # Arrange
+            Mock -ModuleName ReadinessChecks Invoke-WebRequest {
+                return @{
+                    StatusCode = 200
+                    Content = '{"status":"ready"}'
+                }
+            } -ParameterFilter { $Uri -like "http://test-host:8000/health" }
+            
+            # Act
+            $result = Test-EndpointPath -Host "test-host:8000" -Path "/health"
+            
+            # Assert
+            $result | Should -BeTrue
+            Should -Invoke -ModuleName ReadinessChecks Invoke-WebRequest -ParameterFilter { $Uri -like "http://test-host:8000/health" } -Times 1
+        }
+        
+        It "Returns false when an endpoint is not ready" {
+            # Arrange
+            Mock -ModuleName ReadinessChecks Invoke-WebRequest { throw "Connection failed" } -ParameterFilter { $Uri -like "http://test-host:8000/status" }
+            
+            # Act
+            $result = Test-EndpointPath -Host "test-host:8000" -Path "/status"
+            
+            # Assert
+            $result | Should -BeFalse
+            Should -Invoke -ModuleName ReadinessChecks Invoke-WebRequest -ParameterFilter { $Uri -like "http://test-host:8000/status" } -Times 1
         }
     }
 }

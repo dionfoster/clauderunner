@@ -131,96 +131,94 @@ Describe "Logging Module" {
 }
 
 Describe "State Machine Visualization" {
-    BeforeAll {
-        # Get reference to the imported module for variable access
-        $script:loggingModule = Get-Module -Name Logging
-    }
-    
     BeforeEach {
         # Create a fresh log file for each test
         Reset-LogFile
         
-        # Reset and initialize module variables
-        Initialize-LoggingModuleVars -Module $script:loggingModule
+        # Reset state machine variables
+        Reset-StateMachineVariables
     }
+    
     Context "Start-StateTransitions" {
         It "Initializes state machine visualization" {
             # Act
             Start-StateTransitions
-              # Assert - use helper to get module variable values
-            $stateTransitionStarted = Get-LoggingModuleVar -Module $script:loggingModule -VarName "StateTransitionStarted"
-            $totalStartTime = Get-LoggingModuleVar -Module $script:loggingModule -VarName "TotalStartTime"
             
-            $stateTransitionStarted | Should -BeTrue
-            $totalStartTime | Should -Not -BeNullOrEmpty
-              # Check log file
+            # Assert
+            $script:StateTransitionStarted | Should -BeTrue
+            $script:TotalStartTime | Should -Not -BeNullOrEmpty
+            
+            # Check log file
             $logContent = Get-Content -Path $script:TestLogPath -Raw
-            $logContent | Should -Match "STATE TRANSITIONS:"
+            $logContent | Should -Match "\[\d{2}:\d{2}:\d{2}\] \[INFO\] - STATE TRANSITIONS:"
         }
     }
-      Context "Start-StateProcessing" {
+    
+    Context "Start-StateProcessing" {
         It "Starts processing a state with no dependencies" {
             # Act
             Start-StateProcessing -StateName "TestState"
-              # Assert - use helper to get module variable values
-            $stateStartTimes = Get-LoggingModuleVar -Module $script:loggingModule -VarName "StateStartTimes"
-            $processedStates = Get-LoggingModuleVar -Module $script:loggingModule -VarName "ProcessedStates"
             
-            $stateStartTimes["TestState"] | Should -Not -BeNullOrEmpty
-            $processedStates["TestState"] | Should -Not -BeNullOrEmpty
-            $processedStates["TestState"]["Status"] | Should -Be "Processing"
-            $processedStates["TestState"]["Dependencies"].Count | Should -Be 0
-              # Check log file
+            # Assert
+            $script:StateStartTimes["TestState"] | Should -Not -BeNullOrEmpty
+            $script:ProcessedStates["TestState"] | Should -Not -BeNullOrEmpty
+            $script:ProcessedStates["TestState"]["Status"] | Should -Be "Processing"
+            $script:ProcessedStates["TestState"]["Dependencies"].Count | Should -Be 0
+            
+            # Check log file
             $logContent = Get-Content -Path $script:TestLogPath -Raw
+            $logContent | Should -Match "STATE TRANSITIONS:"
             $logContent | Should -Match "┌─ STATE: 🔄 ⚙️ TestState"
             $logContent | Should -Match "│  ├─ Dependencies: none"
         }
-          It "Starts processing a state with dependencies" {
+        
+        It "Starts processing a state with dependencies" {
             # Act
             Start-StateProcessing -StateName "TestState" -Dependencies @("Dep1", "Dep2")
             
-            # Assert - use helper to get module variable values
-            $processedStates = Get-LoggingModuleVar -Module $script:loggingModule -VarName "ProcessedStates"
+            # Assert
+            $script:StateStartTimes["TestState"] | Should -Not -BeNullOrEmpty
+            $script:ProcessedStates["TestState"]["Dependencies"].Count | Should -Be 2
+            $script:ProcessedStates["TestState"]["Dependencies"] | Should -Contain "Dep1"
+            $script:ProcessedStates["TestState"]["Dependencies"] | Should -Contain "Dep2"
             
-            $processedStates["TestState"]["Dependencies"].Count | Should -Be 2
-            $processedStates["TestState"]["Dependencies"] | Should -Contain "Dep1"
-            $processedStates["TestState"]["Dependencies"] | Should -Contain "Dep2"
-              # Check log file
+            # Check log file
             $logContent = Get-Content -Path $script:TestLogPath -Raw
             $logContent | Should -Match "│  ├─ Dependencies: Dep1 ✓, Dep2 ✓"
         }
     }
-      Context "Complete-State" {
+    
+    Context "Complete-State" {
         BeforeEach {
             # Setup state
             Start-StateProcessing -StateName "TestState"
         }
-          It "Completes a state successfully" {
+        
+        It "Completes a state successfully" {
             # Act
             Complete-State -StateName "TestState" -Success $true
             
-            # Assert - use helper to get module variable values
-            $processedStates = Get-LoggingModuleVar -Module $script:loggingModule -VarName "ProcessedStates"
+            # Assert
+            $script:ProcessedStates["TestState"]["Status"] | Should -Be "Completed"
+            $script:ProcessedStates["TestState"]["Duration"] | Should -Not -BeNullOrEmpty
             
-            $processedStates["TestState"]["Status"] | Should -Be "Completed"
-            $processedStates["TestState"]["Duration"] | Should -Not -BeNullOrEmpty
-              # Check log file
+            # Check log file
             $logContent = Get-Content -Path $script:TestLogPath -Raw
-            $logContent | Should -Match "Result: ✅ COMPLETED"
+            $logContent | Should -Match "│  └─ Result: ✅ COMPLETED \(\d+\.\d+s\)"
         }
-          It "Marks a state as failed" {
+        
+        It "Marks a state as failed" {
             # Act
             Complete-State -StateName "TestState" -Success $false -ErrorMessage "Test error"
             
-            # Assert - use helper to get module variable values
-            $processedStates = Get-LoggingModuleVar -Module $script:loggingModule -VarName "ProcessedStates"
+            # Assert
+            $script:ProcessedStates["TestState"]["Status"] | Should -Be "Failed"
+            $script:ProcessedStates["TestState"]["ErrorMessage"] | Should -Be "Test error"
             
-            $processedStates["TestState"]["Status"] | Should -Be "Failed"
-            $processedStates["TestState"]["ErrorMessage"] | Should -Be "Test error"
-              # Check log file
+            # Check log file
             $logContent = Get-Content -Path $script:TestLogPath -Raw
-            $logContent | Should -Match "Result: ❌ FAILED"
-            $logContent | Should -Match "Error: Test error"
+            $logContent | Should -Match "│  └─ Result: ❌ FAILED \(\d+\.\d+s\)"
+            $logContent | Should -Match "│     └─ Error: Test error"
         }
     }
 }

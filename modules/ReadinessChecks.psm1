@@ -389,6 +389,177 @@ function Get-EndpointUri {
     return $null
 }
 
+<#
+.SYNOPSIS
+Tests if a command is available on the system.
+
+.DESCRIPTION
+Checks if a specific command is available on the system using Get-Command.
+Used for dependency checks like Docker, Node.js, etc.
+
+.PARAMETER CommandName
+The name of the command to check for.
+
+.OUTPUTS
+Returns $true if the command is available, $false otherwise.
+#>
+function Test-CommandAvailable {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$CommandName
+    )
+    
+    try {
+        Get-Command -Name $CommandName -ErrorAction Stop | Out-Null
+        return $true
+    }
+    catch {
+        return $false
+    }
+}
+
+<#
+.SYNOPSIS
+Tests if a service or process is running.
+
+.DESCRIPTION
+Executes a command to check if a service or process is running.
+Used for services like Docker, database servers, etc.
+
+.PARAMETER Command
+The command to execute to check if the service is running.
+
+.OUTPUTS
+Returns $true if the service is running, $false otherwise.
+#>
+function Test-ServiceRunning {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Command
+    )
+    
+    try {
+        Invoke-Expression $Command | Out-Null
+        return $true
+    }
+    catch {
+        return $false
+    }
+}
+
+<#
+.SYNOPSIS
+Tests if an API endpoint at a specific path is ready.
+
+.DESCRIPTION
+Checks if an API endpoint is responding with 200 OK status.
+
+.PARAMETER Host
+The host:port of the API to check.
+
+.PARAMETER Path
+The path of the endpoint to check, defaults to '/readiness'.
+
+.PARAMETER Protocol
+The protocol to use, defaults to 'http'.
+
+.PARAMETER TimeoutSeconds
+The timeout in seconds, defaults to 5.
+
+.OUTPUTS
+Returns $true if the API is ready, $false otherwise.
+#>
+function Test-EndpointPath {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Host,
+        
+        [Parameter(Mandatory=$false)]
+        [string]$Path = '/readiness',
+        
+        [Parameter(Mandatory=$false)]
+        [string]$Protocol = 'http',
+        
+        [Parameter(Mandatory=$false)]
+        [int]$TimeoutSeconds = 5
+    )
+    
+    try {
+        $uri = "${Protocol}://${Host}${Path}"
+        $response = Invoke-WebRequest -Uri $uri -Method GET -TimeoutSec $TimeoutSeconds
+        return $response.StatusCode -eq 200
+    }
+    catch {
+        return $false
+    }
+}
+
+# Implement the specific functions using the generic ones
+
+<#
+.SYNOPSIS
+Tests if Docker is installed.
+
+.DESCRIPTION
+Checks if the Docker command is available on the system.
+
+.OUTPUTS
+Returns $true if Docker is installed, $false otherwise.
+#>
+function Test-DockerInstalled {
+    return Test-CommandAvailable -CommandName "docker"
+}
+
+<#
+.SYNOPSIS
+Tests if Docker daemon is running.
+
+.DESCRIPTION
+Checks if the Docker daemon is running by executing 'docker info'.
+
+.OUTPUTS
+Returns $true if Docker is running, $false otherwise.
+#>
+function Test-DockerRunning {
+    return Test-ServiceRunning -Command "docker info"
+}
+
+<#
+.SYNOPSIS
+Tests if Node.js is installed.
+
+.DESCRIPTION
+Checks if the Node.js command is available on the system.
+
+.OUTPUTS
+Returns $true if Node.js is installed, $false otherwise.
+#>
+function Test-NodeJSInstalled {
+    return Test-CommandAvailable -CommandName "node"
+}
+
+<#
+.SYNOPSIS
+Tests if an API endpoint is ready.
+
+.DESCRIPTION
+Checks if an API endpoint is responding with 200 OK status.
+
+.PARAMETER ApiHost
+The host:port of the API to check.
+
+.OUTPUTS
+Returns $true if the API is ready, $false otherwise.
+#>
+function Test-ApiReady {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$ApiHost
+    )
+    
+    return Test-EndpointPath -Host $ApiHost -Path "/readiness"
+}
+
 # Export the functions
-Export-ModuleMember -Function Test-WebEndpoint, Test-EndpointReadiness, Test-ContinueAfter, Test-PreCheck, Get-EndpointUri
+Export-ModuleMember -Function Test-WebEndpoint, Test-EndpointReadiness, Test-ContinueAfter, Test-PreCheck, Get-EndpointUri, Test-DockerInstalled, Test-DockerRunning, Test-NodeJSInstalled, Test-ApiReady, Test-CommandAvailable, Test-ServiceRunning, Test-EndpointPath
 

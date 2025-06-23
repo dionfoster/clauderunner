@@ -232,39 +232,3 @@ function global:ConvertFrom-Yaml {
 
 # Export functions (not using Export-ModuleMember since this is not a module)
 # Functions are exported with global: prefix
-
-function global:Initialize-LoggingModuleVars {
-    param (
-        [Parameter(Mandatory=$true)]
-        [ValidateNotNull()]
-        [System.Management.Automation.PSModuleInfo]$Module
-    )
-    
-    # Reset global variables first
-    Reset-StateMachineVariables
-    
-    # Update the module's script variables
-    & $Module {
-        $script:StateTransitionStarted = $false
-        $script:TotalStartTime = $null
-        $script:StateStartTimes = @{}
-        $script:ActionStartTimes = @{}
-        $script:ProcessedStates = @{}
-    }
-}
-
-# Helper function to get script variable values from the module
-function global:Get-LoggingModuleVar {
-    param (
-        [Parameter(Mandatory=$true)]
-        [ValidateNotNull()]
-        [System.Management.Automation.PSModuleInfo]$Module,
-        
-        [Parameter(Mandatory=$true)]
-        [string]$VarName
-    )
-    
-    # Get the value of the script variable from the module
-    $value = & $Module { param($name) Get-Variable -Name $name -Scope Script -ValueOnly -ErrorAction SilentlyContinue } $VarName
-    return $value
-}
