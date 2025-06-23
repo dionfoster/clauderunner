@@ -1,16 +1,7 @@
 # CommandExecution.psm1 - Claude Task Runner command execution functions
 
-# Access to state machine logging functions
-# These are imported by the main script
-function Start-StateTransitions { if (Get-Command Start-StateTransitions -ErrorAction SilentlyContinue) { Start-StateTransitions @args } }
-function Start-StateProcessing { if (Get-Command Start-StateProcessing -ErrorAction SilentlyContinue) { Start-StateProcessing @args } }
-function Write-StateCheck { if (Get-Command Write-StateCheck -ErrorAction SilentlyContinue) { Write-StateCheck @args } }
-function Write-StateCheckResult { if (Get-Command Write-StateCheckResult -ErrorAction SilentlyContinue) { Write-StateCheckResult @args } }
-function Start-StateActions { if (Get-Command Start-StateActions -ErrorAction SilentlyContinue) { Start-StateActions @args } }
-function Start-StateAction { if (Get-Command Start-StateAction -ErrorAction SilentlyContinue) { Start-StateAction @args } }
-function Complete-StateAction { if (Get-Command Complete-StateAction -ErrorAction SilentlyContinue) { Complete-StateAction @args } }
-function Complete-State { if (Get-Command Complete-State -ErrorAction SilentlyContinue) { Complete-State @args } }
-function Write-StateSummary { if (Get-Command Write-StateSummary -ErrorAction SilentlyContinue) { Write-StateSummary @args } }
+# Import Logging module for direct access to logging functions
+# No wrapper functions to avoid infinite recursion
 
 <#
 .SYNOPSIS

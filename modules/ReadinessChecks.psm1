@@ -1,16 +1,7 @@
 # ReadinessChecks.psm1 - Claude Task Runner readiness check functions
 
-# Access to state machine logging functions
-# These are imported by the main script
-function Start-StateTransitions { if (Get-Command Start-StateTransitions -ErrorAction SilentlyContinue) { Start-StateTransitions @args } }
-function Start-StateProcessing { if (Get-Command Start-StateProcessing -ErrorAction SilentlyContinue) { Start-StateProcessing @args } }
-function Write-StateCheck { if (Get-Command Write-StateCheck -ErrorAction SilentlyContinue) { Write-StateCheck @args } }
-function Write-StateCheckResult { if (Get-Command Write-StateCheckResult -ErrorAction SilentlyContinue) { Write-StateCheckResult @args } }
-function Start-StateActions { if (Get-Command Start-StateActions -ErrorAction SilentlyContinue) { Start-StateActions @args } }
-function Start-StateAction { if (Get-Command Start-StateAction -ErrorAction SilentlyContinue) { Start-StateAction @args } }
-function Complete-StateAction { if (Get-Command Complete-StateAction -ErrorAction SilentlyContinue) { Complete-StateAction @args } }
-function Complete-State { if (Get-Command Complete-State -ErrorAction SilentlyContinue) { Complete-State @args } }
-function Write-StateSummary { if (Get-Command Write-StateSummary -ErrorAction SilentlyContinue) { Write-StateSummary @args } }
+# Import Logging module for direct access to logging functions
+# No wrapper functions to avoid infinite recursion
 
 <#
 .SYNOPSIS
@@ -18,6 +9,7 @@ Tests if a web endpoint is accessible.
 
 .DESCRIPTION
 Attempts to access a web endpoint and returns success or failure.
+Used for both checkEndpoint and waitEndpoint readiness checks.
 
 .PARAMETER Uri
 The URI of the endpoint to check.
@@ -54,7 +46,7 @@ Tests if an endpoint is ready by polling it.
 Polls an endpoint until it's ready or times out.
 
 .PARAMETER Uri
-The URI of the endpoint to check.
+The URI of the endpoint to check (typically from checkEndpoint or waitEndpoint).
 
 .PARAMETER StateName
 The name of the state for logging.
@@ -70,6 +62,9 @@ The number of successful retries required.
 
 .PARAMETER MaxTimeSeconds
 The maximum time to wait in seconds.
+
+.PARAMETER StateConfig
+Optional state configuration to extract readiness parameters from.
 
 .OUTPUTS
 Returns $true if the endpoint is ready, $false otherwise.
@@ -95,17 +90,18 @@ function Test-EndpointReadiness {
         [int]$MaxTimeSeconds = 30,
         
         [Parameter(Mandatory=$false)]
+        [hashtable]$StateConfig,
+        
+        [Parameter(Mandatory=$false)]
         [switch]$Quiet
     )
     
     $attempt = 0
     $successCount = 0
-    $startTime = Get-Date
+    $startTime = Get-Date    $pollingDetails = "Polling endpoint: $Uri (max $MaxRetries tries, ${RetryInterval}s interval, need $SuccessfulRetries successes, timeout ${MaxTimeSeconds}s)"
+    $actionId = Logging\Start-StateAction -StateName $StateName -ActionType "Command" -ActionCommand "Endpoint polling" -Description $pollingDetails
     
-    $pollingDetails = "Polling endpoint: $Uri (max $MaxRetries tries, ${RetryInterval}s interval, need $SuccessfulRetries successes, timeout ${MaxTimeSeconds}s)"
-    $actionId = Start-StateAction -StateName $StateName -ActionType "Command" -ActionCommand "Endpoint polling" -Description $pollingDetails
-    
-    $finalSuccess = $false
+    # Remove the unused $finalSuccess variable
     
     do {
         $attempt++
@@ -115,27 +111,21 @@ function Test-EndpointReadiness {
         
         if ($success) {
             $successCount++
-            
-            if ($successCount -ge $SuccessfulRetries) {
-                Complete-StateAction -StateName $StateName -ActionId $actionId -Success $true
-                $finalSuccess = $true
+              if ($successCount -ge $SuccessfulRetries) {
+                Logging\Complete-StateAction -StateName $StateName -ActionId $actionId -Success $true
                 return $true
             }
         } else {
             $successCount = 0  # Reset on failure
         }
-        
-        # Check if we have exceeded time limit
+          # Check if we have exceeded time limit
         if ($elapsed -ge $MaxTimeSeconds) {
-            Complete-StateAction -StateName $StateName -ActionId $actionId -Success $false -ErrorMessage "Timed out after ${elapsed}s"
-            $finalSuccess = $false
+            Logging\Complete-StateAction -StateName $StateName -ActionId $actionId -Success $false -ErrorMessage "Timed out after ${elapsed}s"
             return $false
         }
-        
-        # Check if we have exceeded retry limit
+          # Check if we have exceeded retry limit
         if ($attempt -ge $MaxRetries) {
-            Complete-StateAction -StateName $StateName -ActionId $actionId -Success $false -ErrorMessage "Max retries ($MaxRetries) exceeded"
-            $finalSuccess = $false
+            Logging\Complete-StateAction -StateName $StateName -ActionId $actionId -Success $false -ErrorMessage "Max retries ($MaxRetries) exceeded"
             return $false
         }
         
@@ -153,6 +143,7 @@ Tests if a command indicates a state is ready.
 
 .DESCRIPTION
 Executes a command and checks if it indicates a state is ready.
+Can also perform endpoint checks using checkEndpoint or waitEndpoint from StateConfig.
 
 .PARAMETER Command
 The command to execute.
@@ -173,7 +164,7 @@ The number of successful retries required.
 The maximum time to wait in seconds.
 
 .PARAMETER StateConfig
-The state configuration.
+The state configuration with readiness properties.
 
 .OUTPUTS
 Returns $true if the command indicates the state is ready, $false otherwise.
@@ -215,15 +206,13 @@ function Test-ContinueAfter {
         if ($StateConfig.readiness.retryInterval) { $RetryInterval = $StateConfig.readiness.retryInterval }
         if ($StateConfig.readiness.successfulRetries) { $SuccessfulRetries = $StateConfig.readiness.successfulRetries }
         if ($StateConfig.readiness.maxTimeSeconds) { $MaxTimeSeconds = $StateConfig.readiness.maxTimeSeconds }
-    }
-    
-    # Create a "polling" action for the command check
+    }    # Create a "polling" action for the command check
     $pollingDetails = "Polling command: $Command (max $MaxRetries tries, ${RetryInterval}s interval, need $SuccessfulRetries successes, timeout ${MaxTimeSeconds}s)"
-    $actionId = Start-StateAction -StateName $StateName -ActionType "Command" -ActionCommand "Command polling" -Description $pollingDetails
+    $actionId = Logging\Start-StateAction -StateName $StateName -ActionType "Command" -ActionCommand "Command polling" -Description $pollingDetails
     
-    # Check if this is an endpoint check
-    $isEndpointCheck = $null -ne $StateConfig.readiness.endpoint
-    $endpointUri = $StateConfig.readiness.endpoint
+    # Check if this is an endpoint check - use the helper function
+    $endpointUri = Get-EndpointUri -StateConfig $StateConfig -ForWaiting
+    $isEndpointCheck = $null -ne $endpointUri
     
     do {
         $attempt++
@@ -251,27 +240,25 @@ function Test-ContinueAfter {
                 $success = $false
             }
         }
-        
-        if ($success) {
+          if ($success) {
             $successCount++
             
             if ($successCount -ge $SuccessfulRetries) {
-                Complete-StateAction -StateName $StateName -ActionId $actionId -Success $true
+                Logging\Complete-StateAction -StateName $StateName -ActionId $actionId -Success $true
                 return $true
             }
         } else {
             $successCount = 0  # Reset on failure
         }
-        
-        # Check if we have exceeded time limit
+          # Check if we have exceeded time limit
         if ($elapsed -ge $MaxTimeSeconds) {
-            Complete-StateAction -StateName $StateName -ActionId $actionId -Success $false -ErrorMessage "Timed out after ${elapsed}s"
+            Logging\Complete-StateAction -StateName $StateName -ActionId $actionId -Success $false -ErrorMessage "Timed out after ${elapsed}s"
             return $false
         }
         
         # Check if we have exceeded retry limit
         if ($attempt -ge $MaxRetries) {
-            Complete-StateAction -StateName $StateName -ActionId $actionId -Success $false -ErrorMessage "Max retries ($MaxRetries) exceeded"
+            Logging\Complete-StateAction -StateName $StateName -ActionId $actionId -Success $false -ErrorMessage "Max retries ($MaxRetries) exceeded"
             return $false
         }
         
@@ -289,6 +276,7 @@ Tests if a state is already ready using a command.
 
 .DESCRIPTION
 Executes a command to check if a state is already ready.
+Can also check endpoint readiness using the checkEndpoint property from StateConfig.
 
 .PARAMETER CheckCommand
 The command to execute.
@@ -297,7 +285,7 @@ The command to execute.
 The name of the state for logging.
 
 .PARAMETER StateConfig
-The state configuration.
+The state configuration with readiness properties.
 
 .OUTPUTS
 Returns $true if the state is already ready, $false otherwise.
@@ -313,7 +301,18 @@ function Test-PreCheck {
         [Parameter(Mandatory=$false)]
         [hashtable]$StateConfig
     )
+      # First check if this is an endpoint pre-check
+    if ($StateConfig -and $StateConfig.readiness) {
+        # Use the helper function to get the appropriate endpoint for checking
+        $checkEndpoint = Get-EndpointUri -StateConfig $StateConfig
+        
+        # If we have an endpoint to check, test it directly
+        if ($checkEndpoint) {
+            return Test-WebEndpoint -Uri $checkEndpoint -StateName $StateName
+        }
+    }
     
+    # If not an endpoint check, proceed with command check
     try {
         # Use try-catch instead of job for better exit code handling
         $output = $null
@@ -343,5 +342,53 @@ function Test-PreCheck {
     return $false
 }
 
+<#
+.SYNOPSIS
+Gets the appropriate endpoint URI from a state configuration.
+
+.DESCRIPTION
+Extracts the endpoint URI from state configuration based on context.
+For waiting operations, it prioritizes waitEndpoint over checkEndpoint.
+For checking operations, it uses checkEndpoint.
+
+.PARAMETER StateConfig
+The state configuration hashtable containing readiness settings.
+
+.PARAMETER ForWaiting
+If specified, prioritizes the waitEndpoint property for polling operations.
+
+.OUTPUTS
+Returns the endpoint URI as a string, or $null if no appropriate endpoint is found.
+#>
+function Get-EndpointUri {
+    param(
+        [Parameter(Mandatory=$true)]
+        [hashtable]$StateConfig,
+        
+        [Parameter(Mandatory=$false)]
+        [switch]$ForWaiting
+    )
+    
+    if (-not $StateConfig -or -not $StateConfig.readiness) {
+        return $null
+    }
+    if ($ForWaiting) {
+        # For waiting, prefer waitEndpoint over checkEndpoint
+        if ($null -ne $StateConfig.readiness.waitEndpoint) {
+            return $StateConfig.readiness.waitEndpoint
+        } elseif ($null -ne $StateConfig.readiness.checkEndpoint) {
+            return $StateConfig.readiness.checkEndpoint
+        }
+    } else {
+        # For checking, use checkEndpoint
+        if ($null -ne $StateConfig.readiness.checkEndpoint) {
+            return $StateConfig.readiness.checkEndpoint
+        }
+    }
+    
+    return $null
+}
+
 # Export the functions
-Export-ModuleMember -Function Test-WebEndpoint, Test-EndpointReadiness, Test-ContinueAfter, Test-PreCheck
+Export-ModuleMember -Function Test-WebEndpoint, Test-EndpointReadiness, Test-ContinueAfter, Test-PreCheck, Get-EndpointUri
+

@@ -15,6 +15,17 @@ applyTo: '**'
 - Break down large functions into smaller, reusable components
 - For each refactor, make small incremental changes and test thoroughly
 
+## Backwards Compatibility
+- If a change breaks existing functionality, ask for confirmation before proceeding with backwards compatability changes
+- This task runner is in development, so breaking changes are acceptable as long as they are communicated clearly
+- Always ask for confirmation before making backwards compatibility changes
+
+## Bug Fixing
+- Focus on the root cause, not just symptoms
+- Do not introduce new bugs while fixing existing ones
+- Write tests for fixed bugs to prevent regressions
+- If introducing a fix that changes the behavior of existing code, ask for confirmation before proceeding
+
 ## PowerShell Standards
 - Use explicit parameter validation and help documentation
 - Follow consistent error handling patterns with try/catch blocks
@@ -37,6 +48,7 @@ applyTo: '**'
 - Provide helpful, actionable error messages
 - Launch methods should be appropriate to the application type
 - It is important that tasks are either explicitly retried or fail gracefully, there are specific points in which the task runner should fail, and continue, do not invent ways to ignore errors and continue
+- Do not use delays or sleeps in the task runner, it should either fail or retry based on the task's readiness and state
 
 ## Implementation Patterns
 - Prefer explicit return values over relying on $LASTEXITCODE

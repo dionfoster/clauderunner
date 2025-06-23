@@ -49,20 +49,19 @@ function Invoke-State {
     catch {
         throw "Configuration error: $($_.Exception.Message)"
     }
-    
-    # Get dependencies
+      # Get dependencies
     $dependencies = @()
     if ($stateConfig.needs) {
         $dependencies = $stateConfig.needs
     }
     
-    Start-StateProcessing -StateName $StateName -Dependencies $dependencies
+    # Directly call Logging module functions to avoid recursive wrapper calls
+    Logging\Start-StateProcessing -StateName $StateName -Dependencies $dependencies
     
     # Handle dependencies first
     if ($stateConfig.needs) {        
-        foreach ($dependency in $stateConfig.needs) {
-            if (-not (Invoke-State -StateName $dependency -Config $Config -ProcessedStates $ProcessedStates)) {
-                Complete-State -StateName $StateName -Success $false -ErrorMessage "Dependency $dependency failed"
+        foreach ($dependency in $stateConfig.needs) {            if (-not (Invoke-State -StateName $dependency -Config $Config -ProcessedStates $ProcessedStates)) {
+                Logging\Complete-State -StateName $StateName -Success $false -ErrorMessage "Dependency $dependency failed"
                 return $false
             }
         }
@@ -71,29 +70,27 @@ function Invoke-State {
     # Perform pre-check if defined
     $skipActions = $false
     
-    if ($stateConfig.readiness) {
-        if ($stateConfig.readiness.checkEndpoint) {
-            Write-StateCheck -StateName $StateName -CheckType "Endpoint" -CheckDetails $stateConfig.readiness.checkEndpoint
+    if ($stateConfig.readiness) {        if ($stateConfig.readiness.checkEndpoint) {
+            Logging\Write-StateCheck -StateName $StateName -CheckType "Endpoint" -CheckDetails $stateConfig.readiness.checkEndpoint
             
             if (ReadinessChecks\Test-WebEndpoint -Uri $stateConfig.readiness.checkEndpoint -StateName $StateName) {
-                Write-StateCheckResult -StateName $StateName -IsReady $true -CheckType "Endpoint" -AdditionalInfo "Status: 200"
+                Logging\Write-StateCheckResult -StateName $StateName -IsReady $true -CheckType "Endpoint" -AdditionalInfo "Status: 200"
                 $skipActions = $true
             }
             else {
-                Write-StateCheckResult -StateName $StateName -IsReady $false -CheckType "Endpoint"
+                Logging\Write-StateCheckResult -StateName $StateName -IsReady $false -CheckType "Endpoint"
             }
         }
         elseif ($stateConfig.readiness.checkCommand) {
-            Write-StateCheck -StateName $StateName -CheckType "Command" -CheckDetails $stateConfig.readiness.checkCommand
-            
-            $isReady = ReadinessChecks\Test-PreCheck -CheckCommand $stateConfig.readiness.checkCommand -StateName $StateName -StateConfig $stateConfig
+            Logging\Write-StateCheck -StateName $StateName -CheckType "Command" -CheckDetails $stateConfig.readiness.checkCommand
+              $isReady = ReadinessChecks\Test-PreCheck -CheckCommand $stateConfig.readiness.checkCommand -StateName $StateName -StateConfig $stateConfig
             
             if ($isReady) {
-                Write-StateCheckResult -StateName $StateName -IsReady $true -CheckType "Command"
+                Logging\Write-StateCheckResult -StateName $StateName -IsReady $true -CheckType "Command"
                 $skipActions = $true
             }
             else {
-                Write-StateCheckResult -StateName $StateName -IsReady $false -CheckType "Command"
+                Logging\Write-StateCheckResult -StateName $StateName -IsReady $false -CheckType "Command"
             }
         }
     }
@@ -103,10 +100,9 @@ function Invoke-State {
         $ProcessedStates.Add($StateName) | Out-Null
         return $true
     }
-    
-    # Execute actions
+      # Execute actions
     if ($stateConfig.actions) {
-        Start-StateActions -StateName $StateName
+        Logging\Start-StateActions -StateName $StateName
         
         foreach ($action in $stateConfig.actions) {
             $params = @{
@@ -128,9 +124,8 @@ function Invoke-State {
             } elseif ($action.type -eq "application") {
                 # Application launch type action
                 $params.Command = $action.path
-                $params.LaunchVia = "windowsApp"
-            } else {
-                Complete-State -StateName $StateName -Success $false -ErrorMessage "Invalid action format"
+                $params.LaunchVia = "windowsApp"            } else {
+                Logging\Complete-State -StateName $StateName -Success $false -ErrorMessage "Invalid action format"
                 return $false
             }
             
@@ -143,15 +138,14 @@ function Invoke-State {
             $actionType = if ($action.type -eq "application") { "Application" } else { "Command" }
             $actionCommand = if ($action -is [string]) { $action } elseif ($action.type -eq "command") { $action.command } else { $action.path }
             $actionDescription = if ($action.description) { $action.description } else { "" }
-            
-            $actionId = Start-StateAction -StateName $StateName -ActionType $actionType -ActionCommand $actionCommand -Description $actionDescription
+              $actionId = Logging\Start-StateAction -StateName $StateName -ActionType $actionType -ActionCommand $actionCommand -Description $actionDescription
             
             $actionSuccess = CommandExecution\Invoke-Command @params
             
-            Complete-StateAction -StateName $StateName -ActionId $actionId -Success $actionSuccess
+            Logging\Complete-StateAction -StateName $StateName -ActionId $actionId -Success $actionSuccess
             
             if (-not $actionSuccess) {
-                Complete-State -StateName $StateName -Success $false -ErrorMessage "Action failed"                
+                Logging\Complete-State -StateName $StateName -Success $false -ErrorMessage "Action failed"                
                 return $false
             }
         }
@@ -167,11 +161,10 @@ function Invoke-State {
         if ($stateConfig.readiness.retryInterval) { $retryInterval = $stateConfig.readiness.retryInterval }
         if ($stateConfig.readiness.successfulRetries) { $successfulRetries = $stateConfig.readiness.successfulRetries }
         if ($stateConfig.readiness.maxTimeSeconds) { $maxTimeSeconds = $stateConfig.readiness.maxTimeSeconds }
-        
-        # Use endpoint-based waiting if configured
+          # Use endpoint-based waiting if configured
         if ($stateConfig.readiness.waitEndpoint) {
             if (-not (ReadinessChecks\Test-EndpointReadiness -Uri $stateConfig.readiness.waitEndpoint -StateName $StateName -MaxRetries $maxRetries -RetryInterval $retryInterval -SuccessfulRetries $successfulRetries -MaxTimeSeconds $maxTimeSeconds)) {
-                Complete-State -StateName $StateName -Success $false -ErrorMessage "Failed to become ready via endpoint polling"
+                Logging\Complete-State -StateName $StateName -Success $false -ErrorMessage "Failed to become ready via endpoint polling"
                 return $false
             }
         }
@@ -180,15 +173,14 @@ function Invoke-State {
             $command = $stateConfig.readiness.waitCommand
             
             if (-not (ReadinessChecks\Test-ContinueAfter -Command $command -StateName $StateName -MaxRetries $maxRetries -RetryInterval $retryInterval -SuccessfulRetries $successfulRetries -MaxTimeSeconds $maxTimeSeconds -StateConfig $stateConfig)) {
-                Complete-State -StateName $StateName -Success $false -ErrorMessage "Failed to become ready via command polling"
+                Logging\Complete-State -StateName $StateName -Success $false -ErrorMessage "Failed to become ready via command polling"
                 return $false
             }
         }
     }
-    
-    # Mark state as processed for this run
+      # Mark state as processed for this run
     $ProcessedStates.Add($StateName) | Out-Null
-    Complete-State -StateName $StateName -Success $true
+    Logging\Complete-State -StateName $StateName -Success $true
     return $true
 }
 
@@ -205,10 +197,9 @@ try {
     
     # Track processed states for this run only
     $processedStates = New-Object System.Collections.Generic.HashSet[string]
+      $success = Invoke-State -StateName $Target -Config $config -ProcessedStates $processedStates
     
-    $success = Invoke-State -StateName $Target -Config $config -ProcessedStates $processedStates
-    
-    Write-StateSummary -Success $success
+    Logging\Write-StateSummary -Success $success
     
     if ($success) {
         Write-Log "🎉 Task runner completed successfully!" "SUCCESS"
