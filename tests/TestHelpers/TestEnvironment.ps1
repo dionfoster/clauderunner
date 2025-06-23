@@ -147,5 +147,88 @@ function global:Mock-ScriptVar {
     }
 }
 
+# Mock for Write-Log function used in modules
+function global:Write-Log {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Message,
+        
+        [Parameter(Mandatory = $false)]
+        [string]$Level = "INFO",
+        
+        [Parameter(Mandatory = $false)]
+        [string]$LogPath = $script:TestLogPath
+    )
+    
+    # When running in tests, we don't need to actually write to a log file
+    # This is just a mock for the function
+    return
+}
+
+# Mock for exit function
+function global:exit {
+    param(
+        [Parameter(Mandatory = $false)]
+        [int]$ExitCode = 0
+    )
+    
+    # When running in tests, we don't want to actually exit the process
+    # This is just a mock for the function
+    return
+}
+
+# Mock for ConvertFrom-Yaml function used in Configuration module
+function global:ConvertFrom-Yaml {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$YamlString
+    )
+    
+    # In tests, we'll parse YAML using a simple approach
+    # This is just for testing and won't handle complex YAML correctly
+    
+    # Define a simple YAML parser for tests
+    $result = @{
+    }
+    $lines = $YamlString -split "`n"
+    
+    $currentSection = $result
+    $currentPath = @()
+    $currentIndent = 0
+    
+    foreach ($line in $lines) {
+        if ([string]::IsNullOrWhiteSpace($line) -or $line.Trim().StartsWith('#')) {
+            continue
+        }
+        
+        # Get indent level and key/value
+        $indent = ($line -replace '^(\s*).*$', '$1').Length
+        $content = $line.Trim()
+        
+        if ($content -match '^([^:]+):\s*(.*)$') {
+            $key = $Matches[1].Trim()
+            $value = $Matches[2].Trim()
+            
+            if ([string]::IsNullOrEmpty($value)) {
+                # This is a section
+                $currentSection[$key] = @{
+                }
+                $currentPath += $key
+                $currentIndent = $indent
+            }
+            else {
+                # Remove quotes if present
+                if ($value -match '^"(.*)"$' -or $value -match '^''(.*)''$') {
+                    $value = $Matches[1]
+                }
+                
+                $currentSection[$key] = $value
+            }
+        }
+    }
+    
+    return $result
+}
+
 # Export functions (not using Export-ModuleMember since this is not a module)
 # Functions are exported with global: prefix

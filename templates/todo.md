@@ -1,7 +1,7 @@
-### Complete the State Machine Visualization tests:
+~~### Complete the State Machine Visualization tests:~~
 
-- Add more detailed tests for state machine functions
-- Mock the necessary internal state to properly test state transitions
+~~- Add more detailed tests for state machine functions~~
+~~- Mock the necessary internal state to properly test state transitions~~
 
 ### Implement the tests for other modules:
 

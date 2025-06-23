@@ -67,3 +67,7 @@ applyTo: '**'
 - If there is a completely new idea or approach, ask for confirmation before proceeding
 - Provide a clear explanation of the benefits and trade-offs of the new approach
 - Ensure that new ideas align with the overall project philosophy and standards
+
+## Testing
+- When fixing broken tests, focus on fixing the underlying issue, not just the test itself
+- When fixing broken tests, also focus on fixing the problem, not writing new tests

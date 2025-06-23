@@ -57,7 +57,7 @@ function Get-Configuration {
     if (-not (Test-Path $script:ConfigPath)) {
         Write-Log "Missing config file: $script:ConfigPath" "ERROR"
         Write-Log "Please create a claude.yml file with your state configuration." "INFO"
-        exit 1
+        return $null
     }
       try {
         $yamlContent = Get-Content $script:ConfigPath -Raw -Encoding UTF8
@@ -66,7 +66,7 @@ function Get-Configuration {
     }
     catch {
         Write-Log "Failed to parse YAML configuration: $($_.Exception.Message)" "ERROR"
-        exit 1
+        return $null
     }
 }
 
