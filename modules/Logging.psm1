@@ -523,13 +523,13 @@ function Complete-State {
         $logMessage | Out-File -FilePath $script:LogPath -Append -Encoding UTF8
         $logMessage = "$(Get-Date -Format 'HH:mm:ss') [INFO] - "
         $logMessage | Out-File -FilePath $script:LogPath -Append -Encoding UTF8
-    }
-    else {
+    }    else {
         Write-Host "│  └─ Result: $status $resultText ($duration`s)" -ForegroundColor $resultColor
         if ($ErrorMessage) {
             Write-Host "│     └─ Error: $ErrorMessage" -ForegroundColor Red
             
-            # Log to file            $logMessage = "$(Get-Date -Format 'HH:mm:ss') [ERROR] - │     └─ Error: $ErrorMessage"
+            # Log to file
+            $logMessage = "$(Get-Date -Format 'HH:mm:ss') [ERROR] - │     └─ Error: $ErrorMessage"
             $logMessage | Out-File -FilePath $script:LogPath -Append -Encoding UTF8
         }
         
@@ -578,7 +578,11 @@ function Write-StateSummary {
         if ($index -eq -1) { [int]::MaxValue } else { $index }
     }
     
-    Write-Host "`nSUMMARY:"
+    # Write summary header - with format matching other log entries
+    $timestamp = Get-Date -Format "HH:mm:ss"
+    $logMessage = "[$timestamp] [INFO] - SUMMARY:"
+    $logMessage | Out-File -FilePath $script:LogPath -Append -Encoding UTF8
+    Write-Host "SUMMARY:" -ForegroundColor Gray
     
     if ($sortedSuccessfulStates.Count -gt 0) {
         $stateList = $sortedSuccessfulStates -join ", "
