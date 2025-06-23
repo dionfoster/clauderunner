@@ -71,3 +71,4 @@ applyTo: '**'
 ## Testing
 - When fixing broken tests, focus on fixing the underlying issue, not just the test itself
 - When fixing broken tests, also focus on fixing the problem, not writing new tests
+- Before adding new tests, ensure that the existing tests are passing and the syntax is correct, DO NOT CONTINUE IF SYNTAX IS INCORRECT

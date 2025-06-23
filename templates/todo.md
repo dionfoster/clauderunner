@@ -5,7 +5,7 @@
 
 ### Implement the tests for other modules:
 
-- Fix the Configuration.Tests.ps1 to properly test the Load-Config function
+~~- Fix the Configuration.Tests.ps1 to properly test the Load-Config function~~
 - Fix the ReadinessChecks.Tests.ps1 to properly test readiness checks
 - Fix the CommandExecution.Tests.ps1 to properly test command execution
 
