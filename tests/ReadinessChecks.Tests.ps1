@@ -37,14 +37,13 @@ AfterAll {
     Cleanup-TestEnvironment
 }
 
-Describe "ReadinessChecks Module" {
-    Context "Test-DockerInstalled" {
+Describe "ReadinessChecks Module" {    Context "Test-CommandAvailable for Docker" {
         It "Returns true when Docker is installed (mocked)" {
             # Arrange
             Mock -ModuleName ReadinessChecks Get-Command { return $true } -ParameterFilter { $Name -eq "docker" }
             
             # Act
-            $result = Test-DockerInstalled
+            $result = Test-CommandAvailable -CommandName "docker"
             
             # Assert
             $result | Should -BeTrue
@@ -56,7 +55,7 @@ Describe "ReadinessChecks Module" {
             Mock -ModuleName ReadinessChecks Get-Command { throw "Command not found" } -ParameterFilter { $Name -eq "docker" }
             
             # Act
-            $result = Test-DockerInstalled
+            $result = Test-CommandAvailable -CommandName "docker"
             
             # Assert
             $result | Should -BeFalse
@@ -64,13 +63,13 @@ Describe "ReadinessChecks Module" {
         }
     }
     
-    Context "Test-DockerRunning" {
+    Context "Test-ServiceRunning for Docker" {
         It "Returns true when Docker is running (mocked)" {
             # Arrange
             Mock -ModuleName ReadinessChecks Invoke-Expression { return "Docker is running" } -ParameterFilter { $Command -like "*docker info*" }
             
             # Act
-            $result = Test-DockerRunning
+            $result = Test-ServiceRunning -Command "docker info"
             
             # Assert
             $result | Should -BeTrue
@@ -82,7 +81,7 @@ Describe "ReadinessChecks Module" {
             Mock -ModuleName ReadinessChecks Invoke-Expression { throw "Docker is not running" } -ParameterFilter { $Command -like "*docker info*" }
             
             # Act
-            $result = Test-DockerRunning
+            $result = Test-ServiceRunning -Command "docker info"
             
             # Assert
             $result | Should -BeFalse
@@ -90,13 +89,13 @@ Describe "ReadinessChecks Module" {
         }
     }
     
-    Context "Test-NodeJSInstalled" {
+    Context "Test-CommandAvailable for Node.js" {
         It "Returns true when Node.js is installed (mocked)" {
             # Arrange
             Mock -ModuleName ReadinessChecks Get-Command { return $true } -ParameterFilter { $Name -eq "node" }
             
             # Act
-            $result = Test-NodeJSInstalled
+            $result = Test-CommandAvailable -CommandName "node"
             
             # Assert
             $result | Should -BeTrue
@@ -108,7 +107,7 @@ Describe "ReadinessChecks Module" {
             Mock -ModuleName ReadinessChecks Get-Command { throw "Command not found" } -ParameterFilter { $Name -eq "node" }
             
             # Act
-            $result = Test-NodeJSInstalled
+            $result = Test-CommandAvailable -CommandName "node"
             
             # Assert
             $result | Should -BeFalse
@@ -116,7 +115,7 @@ Describe "ReadinessChecks Module" {
         }
     }
     
-    Context "Test-ApiReady" {
+    Context "Test-EndpointPath for API readiness" {
         It "Returns true when API is ready (mocked)" {
             # Arrange
             Mock -ModuleName ReadinessChecks Invoke-WebRequest {
@@ -127,7 +126,7 @@ Describe "ReadinessChecks Module" {
             } -ParameterFilter { $Uri -like "*/readiness" }
             
             # Act
-            $result = Test-ApiReady -ApiHost "test-host:8000"
+            $result = Test-EndpointPath -Host "test-host:8000" -Path "/readiness"
             
             # Assert
             $result | Should -BeTrue
@@ -139,7 +138,7 @@ Describe "ReadinessChecks Module" {
             Mock -ModuleName ReadinessChecks Invoke-WebRequest { throw "Connection failed" } -ParameterFilter { $Uri -like "*/readiness" }
             
             # Act
-            $result = Test-ApiReady -ApiHost "test-host:8000"
+            $result = Test-EndpointPath -Host "test-host:8000" -Path "/readiness"
             
             # Assert
             $result | Should -BeFalse
