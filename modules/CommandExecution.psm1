@@ -431,5 +431,175 @@ function Invoke-Command {
     }
 }
 
+<#
+.SYNOPSIS
+Executes a Docker command and returns the output.
+
+.DESCRIPTION
+Executes a Docker command and returns the output. Throws an exception if the command fails.
+
+.PARAMETER Command
+The Docker command to execute, without the 'docker' prefix.
+
+.OUTPUTS
+Returns the output of the Docker command.
+
+.EXAMPLE
+Invoke-DockerCommand -Command "ps"
+#>
+function Invoke-DockerCommand {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Command
+    )
+    
+    try {
+        # Execute the docker command - split the command string to support mocking in tests
+        $cmdArgs = $Command -split ' '
+        $output = docker $cmdArgs
+        return $output
+    }
+    catch {
+        throw "Docker command failed: $_"
+    }
+}
+
+<#
+.SYNOPSIS
+Starts a Docker container from an image.
+
+.DESCRIPTION
+Starts a Docker container from an image with the specified name and port mapping.
+
+.PARAMETER ImageName
+The name of the Docker image to use.
+
+.PARAMETER ApiPort
+The port to map for the API.
+
+.PARAMETER ContainerName
+Optional name for the container. If not provided, Docker will assign a random name.
+
+.PARAMETER AdditionalArgs
+Additional arguments to pass to the Docker run command.
+
+.OUTPUTS
+Returns the output of the Docker run command.
+
+.EXAMPLE
+Start-DockerContainer -ImageName "anthropic-api" -ApiPort 8000
+#>
+function Start-DockerContainer {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$ImageName,
+        
+        [Parameter(Mandatory=$true)]
+        [int]$ApiPort,
+        
+        [Parameter(Mandatory=$false)]
+        [string]$ContainerName = "",
+        
+        [Parameter(Mandatory=$false)]
+        [string]$AdditionalArgs = ""
+    )
+    
+    $nameArg = if ($ContainerName) { "--name $ContainerName" } else { "" }
+    $runCommand = "run -d -p $ApiPort`:8000 $nameArg $AdditionalArgs $ImageName"
+    
+    return Invoke-DockerCommand -Command $runCommand
+}
+
+<#
+.SYNOPSIS
+Stops Docker containers matching a name pattern.
+
+.DESCRIPTION
+Finds and stops Docker containers that match the specified name pattern.
+
+.PARAMETER NamePattern
+The pattern to match container names against.
+
+.OUTPUTS
+None.
+
+.EXAMPLE
+Stop-DockerContainer -NamePattern "anthropic-api"
+#>
+function Stop-DockerContainer {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$NamePattern
+    )
+    
+    # Get all running containers
+    $containers = Invoke-DockerCommand -Command "ps --format '{{.ID}} {{.Names}}'"
+    
+    # Filter containers by name pattern
+    $matchingContainers = $containers | Where-Object { $_ -match $NamePattern }
+    
+    # Stop each matching container
+    foreach ($container in $matchingContainers) {
+        $containerId = $container.Split()[0]
+        Invoke-DockerCommand -Command "stop $containerId"
+    }
+}
+
+<#
+.SYNOPSIS
+Submits a prompt to the API and returns the response.
+
+.DESCRIPTION
+Submits a prompt to the API at the specified host and returns the response content.
+
+.PARAMETER ApiHost
+The host address of the API, including port if needed.
+
+.PARAMETER Prompt
+The prompt text to send to the API.
+
+.PARAMETER Model
+The model to use for the prompt.
+
+.PARAMETER MaxTokens
+The maximum number of tokens to generate.
+
+.OUTPUTS
+Returns the content of the API response.
+
+.EXAMPLE
+Submit-Prompt -ApiHost "localhost:8000" -Prompt "Tell me a joke" -Model "claude-2"
+#>
+function Submit-Prompt {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$ApiHost,
+        
+        [Parameter(Mandatory=$true)]
+        [string]$Prompt,
+        
+        [Parameter(Mandatory=$true)]
+        [string]$Model,
+        
+        [Parameter(Mandatory=$false)]
+        [int]$MaxTokens = 1000
+    )
+    
+    $endpoint = "http://$ApiHost/v1/complete"
+    $body = @{
+        prompt = $Prompt
+        model = $Model
+        max_tokens_to_sample = $MaxTokens
+    } | ConvertTo-Json
+    
+    try {
+        $response = Invoke-RestMethod -Uri $endpoint -Method Post -Body $body -ContentType "application/json"
+        return $response.content
+    }
+    catch {
+        throw "Failed to submit prompt to API: $_"
+    }
+}
+
 # Export the functions
-Export-ModuleMember -Function Test-OutputForErrors, Get-ExecutableAndArgs, Build-StartProcessCommand, ConvertTo-LaunchCommand, Invoke-CommandWithTimeout, Invoke-Command, Resolve-CommandAlias
+Export-ModuleMember -Function Test-OutputForErrors, Get-ExecutableAndArgs, Build-StartProcessCommand, ConvertTo-LaunchCommand, Invoke-CommandWithTimeout, Invoke-Command, Resolve-CommandAlias, Invoke-DockerCommand, Start-DockerContainer, Stop-DockerContainer, Submit-Prompt, Invoke-DockerCommand, Start-DockerContainer, Stop-DockerContainer, Submit-Prompt

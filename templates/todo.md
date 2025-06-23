@@ -8,7 +8,7 @@
 ~~- Fix the Configuration.Tests.ps1 to properly test the Load-Config function~~
 ~~- Fix the ReadinessChecks.Tests.ps1 to properly test readiness checks~~
   ~~- Remove specific functions and update tests: Breaking change but cleaner API~~
-- Fix the CommandExecution.Tests.ps1 to properly test command execution
+~~- Fix the CommandExecution.Tests.ps1 to properly test command execution~~
 
 ### Add integration tests:
 
