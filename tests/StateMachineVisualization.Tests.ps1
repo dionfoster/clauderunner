@@ -1,47 +1,37 @@
-# Pester tests for Logging state machine visualization
+# Pester tests for state machine visualization
 BeforeAll {
-    # Import the TestEnvironment helper
-    . "$PSScriptRoot\TestHelpers\TestEnvironment.ps1"
+    # Set up test log path
+    $script:TestLogPath = Join-Path $TestDrive "test.log"
     
-    # Set up test environment
-    Initialize-TestEnvironment
-    
-    # Import the module to test
+    # Import modules directly in dependency order
     Import-Module "$PSScriptRoot\..\modules\Logging.psm1" -Force
+    Import-Module "$PSScriptRoot\..\modules\StateManagement.psm1" -Force
+    Import-Module "$PSScriptRoot\..\modules\StateVisualization.psm1" -Force
     
-    # Update module script variables with our global test variables
-    Update-ModuleScriptVariables -Module (Get-Module Logging)
+    # Initialize log file
+    New-Item -Path $script:TestLogPath -ItemType File -Force | Out-Null
+    Logging\Set-LogPath -Path $script:TestLogPath
     
-    # Create mock for Write-Host to avoid console output during tests
+    # Helper function to access module variables
+    function Get-StateManagementVar {
+        param([string]$VarName)
+        $module = Get-Module StateManagement
+        if ($module) {
+            return & $module ([scriptblock]::Create("return `$script:$VarName"))
+        }
+        return $null
+    }
+      # Create mock for Write-Host to avoid console output during tests
     Mock Write-Host { } -ModuleName Logging
-}
-
-AfterAll {
-    # Clean up test environment
-    Cleanup-TestEnvironment
-}
-
-# Helper function to initialize the state machine environment for each test
-function global:Initialize-StateMachineTest {
-    # Reset variables
-    Reset-StateMachineVariables
-    Reset-LogFile
-    
-    # Initialize ProcessedStates for tests that need it
-    $global:ProcessedStates = @{}
-    $global:StateStartTimes = @{}
-    $global:ActionStartTimes = @{}
-    
-    # Update module variables
-    Update-ModuleScriptVariables -Module (Get-Module Logging)
-    
-    # Make sure the module is using our test log path
-    Set-LogPath -Path $script:TestLogPath
 }
 
 Describe "State Machine Visualization - Basic Functions" {
     BeforeEach {
-        Initialize-StateMachineTest
+        # Reset log file for each test
+        if (Test-Path $script:TestLogPath) {
+            Remove-Item $script:TestLogPath -Force
+        }
+        New-Item -Path $script:TestLogPath -ItemType File -Force | Out-Null
     }
     
     Context "Get-StateIcon" {
@@ -97,8 +87,8 @@ Describe "State Machine Visualization - State Transitions" {
             Start-StateTransitions
             
             # Assert - use our helper to access module script vars
-            $scriptStateTransitionStarted = Get-ModuleScriptVar -Name "StateTransitionStarted"
-            $scriptTotalStartTime = Get-ModuleScriptVar -Name "TotalStartTime"
+            $scriptStateTransitionStarted = Get-StateManagementVar -VarName "StateTransitionStarted"
+            $scriptTotalStartTime = Get-StateManagementVar -VarName "TotalStartTime"
             
             $scriptStateTransitionStarted | Should -BeTrue
             $scriptTotalStartTime | Should -Not -BeNullOrEmpty
@@ -113,12 +103,11 @@ Describe "State Machine Visualization - State Transitions" {
             $beforeTime = Get-Date
             Start-Sleep -Milliseconds 10 # Small delay to ensure time difference
             
-            # Act - call twice
-            Start-StateTransitions
-            $firstStartTime = Get-ModuleScriptVar -Name "TotalStartTime"
+            # Act - call twice            Start-StateTransitions
+            $firstStartTime = Get-StateManagementVar -VarName "TotalStartTime"
             Start-Sleep -Milliseconds 10 # Small delay
             Start-StateTransitions
-            $secondStartTime = Get-ModuleScriptVar -Name "TotalStartTime"
+            $secondStartTime = Get-StateManagementVar -VarName "TotalStartTime"
             
             # Assert - should keep the first start time
             $secondStartTime | Should -Be $firstStartTime
@@ -128,10 +117,9 @@ Describe "State Machine Visualization - State Transitions" {
         It "Records the start time correctly" {
             # Arrange
             $startTime = Get-Date
-            
-            # Act
+              # Act
             Start-StateTransitions
-            $scriptTotalStartTime = Get-ModuleScriptVar -Name "TotalStartTime"
+            $scriptTotalStartTime = Get-StateManagementVar -VarName "TotalStartTime"
             
             # Assert - TotalStartTime should be within a small time window
             $timeDiff = ($scriptTotalStartTime - $startTime).TotalMilliseconds
@@ -144,8 +132,8 @@ Describe "State Machine Visualization - State Transitions" {
             Start-StateProcessing -StateName "TestState"
             
             # Assert - get script vars from module
-            $scriptStateStartTimes = Get-ModuleScriptVar -Name "StateStartTimes"
-            $scriptProcessedStates = Get-ModuleScriptVar -Name "ProcessedStates"
+            $scriptStateStartTimes = Get-StateManagementVar -VarName "StateStartTimes"
+            $scriptProcessedStates = Get-StateManagementVar -VarName "ProcessedStates"
             
             $scriptStateStartTimes["TestState"] | Should -Not -BeNullOrEmpty
             $scriptProcessedStates["TestState"] | Should -Not -BeNullOrEmpty
@@ -163,7 +151,7 @@ Describe "State Machine Visualization - State Transitions" {
             Start-StateProcessing -StateName "TestState" -Dependencies @("Dep1", "Dep2")
             
             # Assert - get script vars from module
-            $scriptProcessedStates = Get-ModuleScriptVar -Name "ProcessedStates"
+            $scriptProcessedStates = Get-StateManagementVar -VarName "ProcessedStates"
             
             $scriptProcessedStates["TestState"]["Dependencies"].Count | Should -Be 2
             $scriptProcessedStates["TestState"]["Dependencies"][0] | Should -Be "Dep1"
@@ -198,15 +186,15 @@ Describe "State Machine Visualization - State Transitions" {
         }
           It "Calls Start-StateTransitions automatically if not already started" {
             # Arrange
-            $scriptStateTransitionStarted = Get-ModuleScriptVar -Name "StateTransitionStarted"
+            $scriptStateTransitionStarted = Get-StateManagementVar -VarName "StateTransitionStarted"
             $scriptStateTransitionStarted | Should -BeFalse # Verify not started
             
             # Act
             Start-StateProcessing -StateName "TestState"
             
             # Assert
-            $scriptStateTransitionStarted = Get-ModuleScriptVar -Name "StateTransitionStarted"
-            $scriptTotalStartTime = Get-ModuleScriptVar -Name "TotalStartTime"
+            $scriptStateTransitionStarted = Get-StateManagementVar -VarName "StateTransitionStarted"
+            $scriptTotalStartTime = Get-StateManagementVar -VarName "TotalStartTime"
             
             $scriptStateTransitionStarted | Should -BeTrue
             $scriptTotalStartTime | Should -Not -BeNullOrEmpty
@@ -225,7 +213,7 @@ Describe "State Machine Visualization - State Transitions" {
         
         It "Logs a command check" {
             # Act
-            Write-StateCheck -StateName "TestState" -CheckType "Command" -CheckDetails "docker ps"
+            Write-StateCheck -CheckType "Command" -CheckDetails "docker ps"
             
             # Assert
             $logContent = Get-Content -Path $script:TestLogPath -Raw
@@ -234,7 +222,7 @@ Describe "State Machine Visualization - State Transitions" {
         
         It "Logs an endpoint check" {
             # Act
-            Write-StateCheck -StateName "TestState" -CheckType "Endpoint" -CheckDetails "http://localhost:8000/health"
+            Write-StateCheck -CheckType "Endpoint" -CheckDetails "http://localhost:8000/health"
             
             # Assert
             $logContent = Get-Content -Path $script:TestLogPath -Raw
@@ -242,7 +230,7 @@ Describe "State Machine Visualization - State Transitions" {
         }
           It "Escapes special characters in check details" {
             # Act
-            Write-StateCheck -StateName "TestState" -CheckType "Command" -CheckDetails "docker ps | grep -i 'claude'"
+            Write-StateCheck -CheckType "Command" -CheckDetails "docker ps | grep -i 'claude'"
             
             # Assert
             $logContent = Get-Content -Path $script:TestLogPath -Raw
@@ -253,15 +241,15 @@ Describe "State Machine Visualization - State Transitions" {
         BeforeEach {
             # Setup state for the check result
             Start-StateProcessing -StateName "TestState"
-            Write-StateCheck -StateName "TestState" -CheckType "Command" -CheckDetails "test command"
+            Write-StateCheck -CheckType "Command" -CheckDetails "test command"
         }
         
         It "Logs a successful check result" {
             # Act
-            Write-StateCheckResult -StateName "TestState" -IsReady $true -CheckType "Command"
+            Write-StateCheckResult -IsReady $true -CheckType "Command"
             
             # Assert
-            $scriptProcessedStates = Get-ModuleScriptVar -Name "ProcessedStates"
+            $scriptProcessedStates = Get-StateManagementVar -VarName "ProcessedStates"
             $scriptProcessedStates["TestState"]["Status"] | Should -Be "Completed"
             $scriptProcessedStates["TestState"]["Result"] | Should -Be "Already ready via Command check"
             
@@ -272,10 +260,10 @@ Describe "State Machine Visualization - State Transitions" {
         
         It "Logs a failed check result" {
             # Act
-            Write-StateCheckResult -StateName "TestState" -IsReady $false -CheckType "Command"
+            Write-StateCheckResult -IsReady $false -CheckType "Command"
             
             # Assert - state should still be in processing status
-            $scriptProcessedStates = Get-ModuleScriptVar -Name "ProcessedStates"
+            $scriptProcessedStates = Get-StateManagementVar -VarName "ProcessedStates"
             $scriptProcessedStates["TestState"]["Status"] | Should -Be "Processing"
             
             # Check log
@@ -284,7 +272,7 @@ Describe "State Machine Visualization - State Transitions" {
         }
           It "Includes additional info in check result for unsuccessful check" {
             # Act
-            Write-StateCheckResult -StateName "TestState" -IsReady $false -CheckType "Command" -AdditionalInfo "Will retry"
+            Write-StateCheckResult -IsReady $false -CheckType "Command" -AdditionalInfo "Will retry"
             
             # Assert
             $logContent = Get-Content -Path $script:TestLogPath -Raw
@@ -306,10 +294,10 @@ Describe "State Machine Visualization - State Transitions" {
             }
             Mock-ScriptVar -Name "ProcessedStates" -Value $scriptProcessedStates
               # Act
-            Write-StateCheckResult -StateName "TestState" -IsReady $true -CheckType "Endpoint" -AdditionalInfo "Status: 200"
+            Write-StateCheckResult -IsReady $true -CheckType "Endpoint" -AdditionalInfo "Status: 200"
             
             # Assert
-            $scriptProcessedStates = Get-ModuleScriptVar -Name "ProcessedStates"
+            $scriptProcessedStates = Get-StateManagementVar -VarName "ProcessedStates"
             $scriptProcessedStates["TestState"]["Status"] | Should -Be "Completed"
             
             # Check log
@@ -375,8 +363,8 @@ Describe "State Machine Visualization - Actions" {
             $actionId | Should -Not -BeNullOrEmpty
             
             # Get updated script variables
-            $scriptActionStartTimes = Get-ModuleScriptVar -Name "ActionStartTimes"
-            $scriptProcessedStates = Get-ModuleScriptVar -Name "ProcessedStates"
+            $scriptActionStartTimes = Get-StateManagementVar -VarName "ActionStartTimes"
+            $scriptProcessedStates = Get-StateManagementVar -VarName "ProcessedStates"
             
             $scriptActionStartTimes[$actionId] | Should -Not -BeNullOrEmpty
             $scriptProcessedStates["TestState"]["Actions"].Count | Should -Be 1
@@ -393,7 +381,7 @@ Describe "State Machine Visualization - Actions" {
             
             # Assert
             # Get updated script variables
-            $scriptProcessedStates = Get-ModuleScriptVar -Name "ProcessedStates"
+            $scriptProcessedStates = Get-StateManagementVar -VarName "ProcessedStates"
             $scriptProcessedStates["TestState"]["Actions"][0]["Type"] | Should -Be "Application"
             $scriptProcessedStates["TestState"]["Actions"][0]["Description"] | Should -Be "Start Node.js app"
             
@@ -410,7 +398,7 @@ Describe "State Machine Visualization - Actions" {
             $actionId1 | Should -Not -Be $actionId2
             
             # Get updated script variables
-            $scriptProcessedStates = Get-ModuleScriptVar -Name "ProcessedStates"
+            $scriptProcessedStates = Get-StateManagementVar -VarName "ProcessedStates"
             $scriptProcessedStates["TestState"]["Actions"].Count | Should -Be 2
             $scriptProcessedStates["TestState"]["Actions"][0]["Id"] | Should -Be $actionId1
             $scriptProcessedStates["TestState"]["Actions"][1]["Id"] | Should -Be $actionId2
@@ -422,7 +410,7 @@ Describe "State Machine Visualization - Actions" {
             $actionId = Start-StateAction -StateName "TestState" -ActionType "Command" -ActionCommand $complexCommand
             
             # Assert            # Get updated script variables
-            $scriptProcessedStates = Get-ModuleScriptVar -Name "ProcessedStates"
+            $scriptProcessedStates = Get-StateManagementVar -VarName "ProcessedStates"
             $scriptProcessedStates["TestState"]["Actions"][0]["Command"] | Should -Be $complexCommand
             
             # Check log contains the command
@@ -468,7 +456,7 @@ Describe "State Machine Visualization - Actions" {
             
             # Assert
             # Get updated script variables
-            $scriptProcessedStates = Get-ModuleScriptVar -Name "ProcessedStates"
+            $scriptProcessedStates = Get-StateManagementVar -VarName "ProcessedStates"
             $scriptProcessedStates["TestState"]["Actions"][0]["Status"] | Should -Be "Success"
             $scriptProcessedStates["TestState"]["Actions"][0]["Duration"] | Should -Not -BeNullOrEmpty
             
@@ -482,7 +470,7 @@ Describe "State Machine Visualization - Actions" {
             
             # Assert
             # Get updated script variables
-            $scriptProcessedStates = Get-ModuleScriptVar -Name "ProcessedStates"
+            $scriptProcessedStates = Get-StateManagementVar -VarName "ProcessedStates"
             $scriptProcessedStates["TestState"]["Actions"][0]["Status"] | Should -Be "Failed"
             $scriptProcessedStates["TestState"]["Actions"][0]["ErrorMessage"] | Should -Be "Command failed with exit code 1"
             
@@ -498,12 +486,12 @@ Describe "State Machine Visualization - Actions" {
             
             # Set up a new action id and start time
             $durationActionId = [Guid]::NewGuid().ToString()
-            $scriptActionStartTimes = Get-ModuleScriptVar -Name "ActionStartTimes"
+            $scriptActionStartTimes = Get-StateManagementVar -VarName "ActionStartTimes"
             $scriptActionStartTimes[$durationActionId] = $startTime
             Mock-ScriptVar -Name "ActionStartTimes" -Value $scriptActionStartTimes
             
             # Add the action to ProcessedStates
-            $scriptProcessedStates = Get-ModuleScriptVar -Name "ProcessedStates"
+            $scriptProcessedStates = Get-StateManagementVar -VarName "ProcessedStates"
             $scriptProcessedStates["TestState"]["Actions"] += @{
                 "Id" = $durationActionId
                 "Type" = "Command"
@@ -518,7 +506,7 @@ Describe "State Machine Visualization - Actions" {
             Complete-StateAction -StateName "TestState" -ActionId $durationActionId -Success $true
             
             # Assert
-            $scriptProcessedStates = Get-ModuleScriptVar -Name "ProcessedStates"
+            $scriptProcessedStates = Get-StateManagementVar -VarName "ProcessedStates"
             $duration = $scriptProcessedStates["TestState"]["Actions"][1]["Duration"]
             $duration | Should -BeGreaterThan 1.5 # Should be at least 1.5 seconds
             
@@ -531,7 +519,7 @@ Describe "State Machine Visualization - Actions" {
             Complete-StateAction -StateName "TestState" -ActionId $script:ActionId -Success $false
             
             # Assert
-            $scriptProcessedStates = Get-ModuleScriptVar -Name "ProcessedStates"
+            $scriptProcessedStates = Get-StateManagementVar -VarName "ProcessedStates"
             $scriptProcessedStates["TestState"]["Actions"][0]["Status"] | Should -Be "Failed"
             $scriptProcessedStates["TestState"]["Actions"][0]["ErrorMessage"] | Should -BeNullOrEmpty
             
@@ -570,7 +558,7 @@ Describe "State Machine Visualization - Actions" {
             Complete-State -StateName "TestState" -Success $true
             
             # Assert
-            $scriptProcessedStates = Get-ModuleScriptVar -Name "ProcessedStates"
+            $scriptProcessedStates = Get-StateManagementVar -VarName "ProcessedStates"
             $scriptProcessedStates["TestState"]["Status"] | Should -Be "Completed"
             $scriptProcessedStates["TestState"]["Duration"] | Should -Not -BeNullOrEmpty
             
@@ -584,7 +572,7 @@ Describe "State Machine Visualization - Actions" {
             Complete-State -StateName "TestState" -Success $false -ErrorMessage "State failed due to action error"
             
             # Assert
-            $scriptProcessedStates = Get-ModuleScriptVar -Name "ProcessedStates"
+            $scriptProcessedStates = Get-StateManagementVar -VarName "ProcessedStates"
             $scriptProcessedStates["TestState"]["Status"] | Should -Be "Failed"
             $scriptProcessedStates["TestState"]["ErrorMessage"] | Should -Be "State failed due to action error"
               # Check log
@@ -597,7 +585,7 @@ Describe "State Machine Visualization - Actions" {
             # Act
             Complete-State -StateName "TestState" -Success $false
               # Assert
-            $scriptProcessedStates = Get-ModuleScriptVar -Name "ProcessedStates"
+            $scriptProcessedStates = Get-StateManagementVar -VarName "ProcessedStates"
             $scriptProcessedStates["TestState"]["Status"] | Should -Be "Failed"
             $scriptProcessedStates["TestState"]["ErrorMessage"] | Should -BeNullOrEmpty
             
@@ -619,7 +607,7 @@ Describe "State Machine Visualization - Actions" {
             Complete-State -StateName "TestState" -Success $true
             
             # Assert
-            $scriptProcessedStates = Get-ModuleScriptVar -Name "ProcessedStates"
+            $scriptProcessedStates = Get-StateManagementVar -VarName "ProcessedStates"
             $duration = $scriptProcessedStates["TestState"]["Duration"]
             $duration | Should -BeGreaterThan 1.5 # Should be around 2 seconds
             
@@ -823,11 +811,11 @@ Describe "State Machine Visualization - Summary" {
             Write-StateSummary -Success $true
             
             # Assert all variables are reset
-            $scriptStateTransitionStarted = Get-ModuleScriptVar -Name "StateTransitionStarted"
-            $scriptTotalStartTime = Get-ModuleScriptVar -Name "TotalStartTime"
-            $scriptStateStartTimes = Get-ModuleScriptVar -Name "StateStartTimes"
-            $scriptActionStartTimes = Get-ModuleScriptVar -Name "ActionStartTimes"
-            $scriptProcessedStates = Get-ModuleScriptVar -Name "ProcessedStates"
+            $scriptStateTransitionStarted = Get-StateManagementVar -VarName "StateTransitionStarted"
+            $scriptTotalStartTime = Get-StateManagementVar -VarName "TotalStartTime"
+            $scriptStateStartTimes = Get-StateManagementVar -VarName "StateStartTimes"
+            $scriptActionStartTimes = Get-StateManagementVar -VarName "ActionStartTimes"
+            $scriptProcessedStates = Get-StateManagementVar -VarName "ProcessedStates"
             
             $scriptStateTransitionStarted | Should -BeFalse
             $scriptTotalStartTime | Should -BeNullOrEmpty
@@ -847,8 +835,8 @@ Describe "State Machine Visualization - End-to-End Flow" {
         # Arrange & Act - Complete flow of a successful state
         Start-StateTransitions
         Start-StateProcessing -StateName "TestState"
-        Write-StateCheck -StateName "TestState" -CheckType "Command" -CheckDetails "test command"
-        Write-StateCheckResult -StateName "TestState" -IsReady $false -CheckType "Command"
+        Write-StateCheck -CheckType "Command" -CheckDetails "test command"
+        Write-StateCheckResult -IsReady $false -CheckType "Command"
         Start-StateActions -StateName "TestState"
         $actionId = Start-StateAction -StateName "TestState" -ActionType "Command" -ActionCommand "test action"
         Complete-StateAction -StateName "TestState" -ActionId $actionId -Success $true
@@ -874,8 +862,8 @@ Describe "State Machine Visualization - End-to-End Flow" {
         # Arrange & Act - Flow of a state that's already ready
         Start-StateTransitions
         Start-StateProcessing -StateName "TestState"
-        Write-StateCheck -StateName "TestState" -CheckType "Command" -CheckDetails "test command"
-        Write-StateCheckResult -StateName "TestState" -IsReady $true -CheckType "Command"
+        Write-StateCheck -CheckType "Command" -CheckDetails "test command"
+        Write-StateCheckResult -IsReady $true -CheckType "Command"
         Write-StateSummary -Success $true
           # Assert
         $logContent = Get-Content -Path $script:TestLogPath -Raw
@@ -892,8 +880,8 @@ Describe "State Machine Visualization - End-to-End Flow" {
         # Arrange & Act - Flow of a state with failed action
         Start-StateTransitions
         Start-StateProcessing -StateName "TestState"
-        Write-StateCheck -StateName "TestState" -CheckType "Command" -CheckDetails "test command"
-        Write-StateCheckResult -StateName "TestState" -IsReady $false -CheckType "Command"
+        Write-StateCheck -CheckType "Command" -CheckDetails "test command"
+        Write-StateCheckResult -IsReady $false -CheckType "Command"
         Start-StateActions -StateName "TestState"
         $actionId = Start-StateAction -StateName "TestState" -ActionType "Command" -ActionCommand "test action"
         Complete-StateAction -StateName "TestState" -ActionId $actionId -Success $false -ErrorMessage "Action failed"
@@ -918,13 +906,13 @@ Describe "State Machine Visualization - End-to-End Flow" {
         
         # First state: dockerStartup
         Start-StateProcessing -StateName "dockerStartup"
-        Write-StateCheck -StateName "dockerStartup" -CheckType "Command" -CheckDetails "docker info"
-        Write-StateCheckResult -StateName "dockerStartup" -IsReady $true -CheckType "Command"
+        Write-StateCheck -CheckType "Command" -CheckDetails "docker info"
+        Write-StateCheckResult -IsReady $true -CheckType "Command"
         
         # Second state: dockerReady with dependency
         Start-StateProcessing -StateName "dockerReady" -Dependencies @("dockerStartup")
-        Write-StateCheck -StateName "dockerReady" -CheckType "Command" -CheckDetails "docker ps"
-        Write-StateCheckResult -StateName "dockerReady" -IsReady $false -CheckType "Command"
+        Write-StateCheck -CheckType "Command" -CheckDetails "docker ps"
+        Write-StateCheckResult -IsReady $false -CheckType "Command"
         Start-StateActions -StateName "dockerReady"
         $actionId = Start-StateAction -StateName "dockerReady" -ActionType "Command" -ActionCommand "docker start container"
         Complete-StateAction -StateName "dockerReady" -ActionId $actionId -Success $true
@@ -932,8 +920,8 @@ Describe "State Machine Visualization - End-to-End Flow" {
         
         # Third state: apiReady with dependency
         Start-StateProcessing -StateName "apiReady" -Dependencies @("dockerReady")
-        Write-StateCheck -StateName "apiReady" -CheckType "Endpoint" -CheckDetails "http://localhost:8000/health"
-        Write-StateCheckResult -StateName "apiReady" -IsReady $true -CheckType "Endpoint" -AdditionalInfo "Status: 200"
+        Write-StateCheck -CheckType "Endpoint" -CheckDetails "http://localhost:8000/health"
+        Write-StateCheckResult -IsReady $true -CheckType "Endpoint" -AdditionalInfo "Status: 200"
         
         Write-StateSummary -Success $true
           # Assert
@@ -963,8 +951,8 @@ Describe "State Machine Visualization - End-to-End Flow" {
         # Arrange & Act - Flow with endpoint check
         Start-StateTransitions
         Start-StateProcessing -StateName "apiReady"
-        Write-StateCheck -StateName "apiReady" -CheckType "Endpoint" -CheckDetails "http://localhost:8000/health"
-        Write-StateCheckResult -StateName "apiReady" -IsReady $true -CheckType "Endpoint" -AdditionalInfo "Status: 200"
+        Write-StateCheck -CheckType "Endpoint" -CheckDetails "http://localhost:8000/health"
+        Write-StateCheckResult -IsReady $true -CheckType "Endpoint" -AdditionalInfo "Status: 200"
         Write-StateSummary -Success $true
           # Assert
         $logContent = Get-Content -Path $script:TestLogPath -Raw
@@ -977,8 +965,8 @@ Describe "State Machine Visualization - End-to-End Flow" {
         # Arrange & Act - Flow with multiple actions
         Start-StateTransitions
         Start-StateProcessing -StateName "nodeReady"
-        Write-StateCheck -StateName "nodeReady" -CheckType "Command" -CheckDetails "node --version"
-        Write-StateCheckResult -StateName "nodeReady" -IsReady $false -CheckType "Command"
+        Write-StateCheck -CheckType "Command" -CheckDetails "node --version"
+        Write-StateCheckResult -IsReady $false -CheckType "Command"
         Start-StateActions -StateName "nodeReady"
         
         # Multiple actions

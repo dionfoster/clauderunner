@@ -1,43 +1,38 @@
 # Pester tests for State Visualization module
 BeforeAll {
-    # Import the TestEnvironment helper
-    . "$PSScriptRoot\TestHelpers\TestEnvironment.ps1"
+    # Set up test log path
+    $script:TestLogPath = Join-Path $TestDrive "test.log"
     
-    # Set up test environment
-    Initialize-TestEnvironment
-    
-    # Import the Logging module first as it's needed by StateVisualization
+    # Import modules directly in dependency order
     Import-Module "$PSScriptRoot\..\modules\Logging.psm1" -Force
-    
-    # Import the modules to test
     Import-Module "$PSScriptRoot\..\modules\StateManagement.psm1" -Force
     Import-Module "$PSScriptRoot\..\modules\StateVisualization.psm1" -Force
     
-    # Set the log path for tests
-    Set-LogPath -Path $script:TestLogPath
+    # Initialize log file
+    New-Item -Path $script:TestLogPath -ItemType File -Force | Out-Null
+    Logging\Set-LogPath -Path $script:TestLogPath
 }
 
 AfterAll {
-    # Clean up test environment
-    Cleanup-TestEnvironment
+    # Clean up test log file
+    if (Test-Path $script:TestLogPath) {
+        Remove-Item $script:TestLogPath -Force
+    }
 }
 
 Describe "State Visualization Module" {
-    Context "State Transitions" {
+      Context "State Transitions" {
         BeforeEach {
-            # Create a fresh log file for each test
-            Reset-LogFile
+            # Reset log file for each test
+            if (Test-Path $script:TestLogPath) {
+                Remove-Item $script:TestLogPath -Force
+            }
+            New-Item -Path $script:TestLogPath -ItemType File -Force | Out-Null
             
-            # Re-import modules to ensure fresh state
-            Import-Module "$PSScriptRoot\..\modules\Logging.psm1" -Force
-            Import-Module "$PSScriptRoot\..\modules\StateManagement.psm1" -Force
-            Import-Module "$PSScriptRoot\..\modules\StateVisualization.psm1" -Force
-            
-            # Set the log path for tests
-            Set-LogPath -Path $script:TestLogPath
-            
-            # Reset state machine variables to ensure clean test state
-            Reset-StateMachineVariables
+            # Reset state machine variables if available
+            if (Get-Command -Name Reset-StateMachineVariables -ErrorAction SilentlyContinue) {
+                Reset-StateMachineVariables
+            }
         }
         
         It "Initializes state transitions" {
@@ -195,9 +190,11 @@ Describe "State Visualization Module" {
                 "Log file doesn't exist" | Should -BeNullOrEmpty
             }
         }
+    
     }
     
     Context "State Completion" {
+        
         BeforeEach {
             # Create a fresh log file for each test
             Reset-LogFile

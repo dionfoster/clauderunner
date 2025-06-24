@@ -150,7 +150,7 @@ function Start-StateAction {
         [string]$Description = ""
     )
     
-    $actionId = Register-SMStateAction -StateName $StateName -ActionType $ActionType
+    $actionId = Register-StateAction -StateName $StateName -ActionType $ActionType
     
     $message = "│  │  ├─ $(Get-StatusIcon 'Executing') $ActionType"
     if ($Description) {
