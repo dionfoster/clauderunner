@@ -439,15 +439,17 @@ Describe "State Machine Visualization - Actions" {
             $complexCommand = "docker run -p 8000:8000 -v $(pwd):/app -e DEBUG=true --name claude image:latest"
             $actionId = Start-StateAction -StateName "TestState" -ActionType "Command" -ActionCommand $complexCommand
             
-            # Assert            # Get updated script variables
+            # Assert
+            # Get updated script variables
             $scriptProcessedStates = Get-StateManagementVar -VarName "ProcessedStates"
             $scriptProcessedStates["TestState"]["Actions"][0]["Command"] | Should -Be $complexCommand
             
             # Check log contains the command
             $logContent = Get-Content -Path $script:TestLogPath -Raw
-            $logContent | Should -Match "Command: docker run -p 8000:8000 -v"
-        }
-    }    Context "Complete-StateAction" {
+            $logContent | Should -Match "Command: docker run -p 8000:8000 -v"        }
+    }
+    
+    Context "Complete-StateAction" {
         BeforeEach {
             # Reset log file for each test
             if (Test-Path $script:TestLogPath) {
