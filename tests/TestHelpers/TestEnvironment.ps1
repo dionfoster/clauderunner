@@ -160,9 +160,13 @@ function global:Write-Log {
         [string]$LogPath = $script:TestLogPath
     )
     
-    # When running in tests, we don't need to actually write to a log file
-    # This is just a mock for the function
-    return
+    # When running in tests, write to the test log file
+    $timestamp = Get-Date -Format "HH:mm:ss"
+    $emoji = "🔧"
+    
+    # Log with timestamp to file
+    $logMessage = "[$timestamp] [$Level] $emoji │  $Message"
+    $logMessage | Out-File -FilePath $script:TestLogPath -Append -Encoding UTF8
 }
 
 # Mock for exit function
