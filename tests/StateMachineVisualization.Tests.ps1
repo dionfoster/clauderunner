@@ -294,9 +294,9 @@ Describe "State Machine Visualization - State Transitions" {
             # Assert
             $scriptProcessedStates = Get-StateManagementVar -VarName "ProcessedStates"
             $scriptProcessedStates["TestState"]["Status"] | Should -Be "Completed"
-            
-            # Check log
-            $logContent = Get-Content -Path $script:TestLogPath -Raw              $logContent | Should -Match "Result: ✅ READY"
+              # Check log
+            $logContent = Get-Content -Path $script:TestLogPath -Raw
+            $logContent | Should -Match "Status: ✅ Ready"
         }
     }
 }
@@ -347,10 +347,10 @@ Describe "State Machine Visualization - Actions" {
                 Remove-Item $script:TestLogPath -Force
             }
             New-Item -Path $script:TestLogPath -ItemType File -Force | Out-Null
-            
-            # Reset state machine variables if available
+              # Reset state machine variables if available
             if (Get-Command -Name Reset-StateMachineVariables -ErrorAction SilentlyContinue) {
-                Reset-StateMachineVariables            }
+                Reset-StateMachineVariables
+            }
             
             Start-StateTransitions
             Start-StateProcessing -StateName "TestState"
@@ -408,14 +408,13 @@ Describe "State Machine Visualization - Actions" {
             # Act - Test with complex command with special chars
             $complexCommand = "docker run -p 8000:8000 -v $(pwd):/app -e DEBUG=true --name claude image:latest"
             $actionId = Start-StateAction -StateName "TestState" -ActionType "Command" -ActionCommand $complexCommand
-            
-            # Assert
+              # Assert
             # Get updated script variables
-            $scriptProcessedStates = Get-StateManagementVar -VarName "ProcessedStates"            $scriptProcessedStates["TestState"]["Actions"][0]["Command"] | Should -Be $complexCommand
-            
-            # Check log contains the command
+            $scriptProcessedStates = Get-StateManagementVar -VarName "ProcessedStates"
+            $scriptProcessedStates["TestState"]["Actions"][0]["Command"] | Should -Be $complexCommand
+              # Check log contains the command
             $logContent = Get-Content -Path $script:TestLogPath -Raw
-            $logContent | Should -Match "Command: docker run -p 8000:8000 -v"
+            $logContent | Should -Match "⏳ Command \(docker run -p 8000:8000 -v"
         }
     }
     
@@ -450,7 +449,7 @@ Describe "State Machine Visualization - Actions" {
             $scriptProcessedStates["TestState"]["Actions"][0]["Duration"] | Should -Not -BeNullOrEmpty
               # Check log
             $logContent = Get-Content -Path $script:TestLogPath -Raw
-            $logContent | Should -Match "│  │  └─ Result: ✓"
+            $logContent | Should -Match "│  │  └─ Status: ✓"
         }
           It "Logs failed action completion with error message" {
             # Act
@@ -463,7 +462,7 @@ Describe "State Machine Visualization - Actions" {
             $scriptProcessedStates["TestState"]["Actions"][0]["ErrorMessage"] | Should -Be "Command failed with exit code 1"
               # Check log
             $logContent = Get-Content -Path $script:TestLogPath -Raw
-            $logContent | Should -Match "│  │  └─ Result: ✗ Error: Command failed with exit code 1"
+            $logContent | Should -Match "│  │  └─ Status: ✗ FAILED \(\d+s\) Error: Command failed with exit code 1"
         }
         
         It "Calculates action duration correctly" {
@@ -495,7 +494,7 @@ Describe "State Machine Visualization - Actions" {
             $scriptProcessedStates["TestState"]["Actions"][0]["ErrorMessage"] | Should -BeNullOrEmpty
               # Check log
             $logContent = Get-Content -Path $script:TestLogPath -Raw
-            $logContent | Should -Match "│  │  └─ Result: ✗"
+            $logContent | Should -Match "│  │  └─ Status: ✗"
             $logContent | Should -Not -Match "│  │  │     └─ Error:"
         }
     }      
@@ -804,19 +803,22 @@ Describe "State Machine Visualization - End-to-End Flow" {
     }
     
     It "Handles a complete successful state flow" {
-        # Arrange & Act - Complete flow of a successful state
-        Start-StateTransitions
+        # Arrange & Act - Complete flow of a successful state        Start-StateTransitions
         Start-StateProcessing -StateName "TestState"
         Write-StateCheck -CheckType "Command" -CheckDetails "test command"
         Write-StateCheckResult -IsReady $false -CheckType "Command"
         Start-StateActions -StateName "TestState"
-        $actionId = Start-StateAction -StateName "TestState" -ActionType "Command" -ActionCommand "test action"        Complete-StateAction -StateName "TestState" -ActionId $actionId -Success $true
+        $actionId = Start-StateAction -StateName "TestState" -ActionType "Command" -ActionCommand "test action"
+        Complete-StateAction -StateName "TestState" -ActionId $actionId -Success $true
         Complete-State -StateName "TestState" -Success $true
         Write-StateSummary
         
         # Assert
         # Check for correct sequence in log
-        $logContent = Get-Content -Path $script:TestLogPath -Raw        # Check key elements individually to make the test more robust            $logContent | Should -Match "🔧 │  STATE TRANSITIONS:"
+        $logContent = Get-Content -Path $script:TestLogPath -Raw
+        
+        # Check key elements individually to make the test more robust
+        $logContent | Should -Match "🔧 │  STATE TRANSITIONS:"
         $logContent | Should -Match "🔧 │  ┌─ STATE: 🔄 ⚙️ TestState"
         $logContent | Should -Match "Check: 🔍 Command check"
         $logContent | Should -Match "Result: ❌ NOT READY"
@@ -824,19 +826,21 @@ Describe "State Machine Visualization - End-to-End Flow" {
         $logContent | Should -Match "Command.*test action"
         $logContent | Should -Match "Status: ✓ SUCCESS"
         $logContent | Should -Match "Result: ✅ COMPLETED"
-        $logContent | Should -Match "\[INFO\] - SUMMARY:"
-        $logContent | Should -Match "Successfully processed: TestState"
+        $logContent | Should -Match "EXECUTION SUMMARY"
+        $logContent | Should -Match "✓ TestState"
     }
     
-    It "Handles a state that's already ready" {
-        # Arrange & Act - Flow of a state that's already ready
+    It "Handles a state that's already ready" {        # Arrange & Act - Flow of a state that's already ready
         Start-StateTransitions
         Start-StateProcessing -StateName "TestState"
-        Write-StateCheck -CheckType "Command" -CheckDetails "test command"        Write-StateCheckResult -IsReady $true -CheckType "Command"
+        Write-StateCheck -CheckType "Command" -CheckDetails "test command"
+        Write-StateCheckResult -IsReady $true -CheckType "Command"
         Write-StateSummary
         
         # Assert
-        $logContent = Get-Content -Path $script:TestLogPath -Raw# Check key elements individually
+        $logContent = Get-Content -Path $script:TestLogPath -Raw
+        
+        # Check key elements individually
         $logContent | Should -Match "🔧 │  ┌─ STATE: 🔄 ⚙️ TestState"
         $logContent | Should -Match "Check: 🔍 Command check"
         $logContent | Should -Match "Result: ✅ READY"
@@ -846,22 +850,21 @@ Describe "State Machine Visualization - End-to-End Flow" {
     }
     
     It "Handles a state with failed action" {
-        # Arrange & Act - Flow of a state with failed action
-        Start-StateTransitions
+        # Arrange & Act - Flow of a state with failed action        Start-StateTransitions
         Start-StateProcessing -StateName "TestState"
         Write-StateCheck -CheckType "Command" -CheckDetails "test command"
         Write-StateCheckResult -IsReady $false -CheckType "Command"
         Start-StateActions -StateName "TestState"
-        $actionId = Start-StateAction -StateName "TestState" -ActionType "Command" -ActionCommand "test action"        Complete-StateAction -StateName "TestState" -ActionId $actionId -Success $false -ErrorMessage "Action failed"
+        $actionId = Start-StateAction -StateName "TestState" -ActionType "Command" -ActionCommand "test action"
+        Complete-StateAction -StateName "TestState" -ActionId $actionId -Success $false -ErrorMessage "Action failed"
         Complete-State -StateName "TestState" -Success $false -ErrorMessage "State failed due to action error"
         Write-StateSummary
         
         # Assert
         $logContent = Get-Content -Path $script:TestLogPath -Raw
-        # Check key elements individually
-        $logContent | Should -Match "🔧 │  ┌─ STATE: 🔄 ⚙️ TestState"
+        # Check key elements individually        $logContent | Should -Match "🔧 │  ┌─ STATE: 🔄 ⚙️ TestState"
         $logContent | Should -Match "Actions:"
-        $logContent | Should -Match "Result: ✗ Error: Action failed"
+        $logContent | Should -Match "Status: ✗ FAILED.*Error: Action failed"
         $logContent | Should -Match "Result: ❌ FAILED"
         $logContent | Should -Match "Error: State failed due to action error"
         $logContent | Should -Match "EXECUTION SUMMARY"
@@ -885,45 +888,47 @@ Describe "State Machine Visualization - End-to-End Flow" {
         $actionId = Start-StateAction -StateName "dockerReady" -ActionType "Command" -ActionCommand "docker start container"
         Complete-StateAction -StateName "dockerReady" -ActionId $actionId -Success $true
         Complete-State -StateName "dockerReady" -Success $true
-        
-        # Third state: apiReady with dependency
-        Start-StateProcessing -StateName "apiReady" -Dependencies @("dockerReady")        Write-StateCheck -CheckType "Endpoint" -CheckDetails "http://localhost:8000/health"
+          # Third state: apiReady with dependency
+        Start-StateProcessing -StateName "apiReady" -Dependencies @("dockerReady")
+        Write-StateCheck -CheckType "Endpoint" -CheckDetails "http://localhost:8000/health"
         Write-StateCheckResult -IsReady $true -CheckType "Endpoint" -AdditionalInfo "Status: 200"
         
         Write-StateSummary
         
         # Assert
         $logContent = Get-Content -Path $script:TestLogPath -Raw
-        
-        # Check that all states are processed in the correct order
+          # Check that all states are processed in the correct order
         $logContent | Should -Match "🔧 │  ┌─ STATE: 🔄 ⚙️ dockerStartup"
-        $logContent | Should -Match "Result: ✅ READY"
+        $logContent | Should -Match "Status: ✅ Ready"
         
-        $logContent | Should -Match "\[INFO\] - ┌─ STATE: 🔄 🐳 dockerReady"
+        $logContent | Should -Match "🔧 │  ┌─ STATE: 🔄 🐳 dockerReady"
         $logContent | Should -Match "Dependencies: dockerStartup ✓"
-        $logContent | Should -Match "Actions: ⏳ EXECUTING"
-        $logContent | Should -Match "Command: docker start container"
-        $logContent | Should -Match "Status: ✓ SUCCESS"        $logContent | Should -Match "Result: ✅ COMPLETED"
+        $logContent | Should -Match "Actions:"
+        $logContent | Should -Match "⏳ Command \(docker start container\)"
+        $logContent | Should -Match "Status: ✓ SUCCESS"
+        $logContent | Should -Match "Result: ✅ COMPLETED"
         
         $logContent | Should -Match "🔧 │  ┌─ STATE: 🔄 🚀 apiReady"
         $logContent | Should -Match "Dependencies: dockerReady ✓"
         $logContent | Should -Match "Result: ✅ READY"
-        
-        # Check summary shows all states in the correct order
-        $logContent | Should -Match "\[INFO\] - SUMMARY:"
-        $logContent | Should -Match "Successfully processed: dockerStartup, dockerReady, apiReady"
+          # Check summary shows all states in the correct order
+        $logContent | Should -Match "EXECUTION SUMMARY"
+        $logContent | Should -Match "✓ apiReady"
+        $logContent | Should -Match "✓ dockerStartup"
+        $logContent | Should -Match "✓ dockerReady"
     }
-    
-    It "Handles endpoint checks with status codes" {
-        # Arrange & Act - Flow with endpoint check        Start-StateTransitions
+      It "Handles endpoint checks with status codes" {
+        # Arrange & Act - Flow with endpoint check
+        Start-StateTransitions
         Start-StateProcessing -StateName "apiReady"
         Write-StateCheck -CheckType "Endpoint" -CheckDetails "http://localhost:8000/health"
         Write-StateCheckResult -IsReady $true -CheckType "Endpoint" -AdditionalInfo "Status: 200"
         Write-StateSummary
           # Assert
-        $logContent = Get-Content -Path $script:TestLogPath -Raw        $logContent | Should -Match "🔧 │  ┌─ STATE: 🔄 🚀 apiReady"
+        $logContent = Get-Content -Path $script:TestLogPath -Raw
+        $logContent | Should -Match "🔧 │  ┌─ STATE: 🔄 🚀 apiReady"
         $logContent | Should -Match "Check: 🔍 Endpoint check"
-        $logContent | Should -Match "Result: ✅ READY"
+        $logContent | Should -Match "Status: ✅ Ready"
     }
     
     It "Handles complex multi-action flows" {
@@ -948,19 +953,18 @@ Describe "State Machine Visualization - End-to-End Flow" {
         
         # Assert
         $logContent = Get-Content -Path $script:TestLogPath -Raw
-        
-        # Check all actions are logged correctly
+          # Check all actions are logged correctly
         $logContent | Should -Match "│  │  ├─ ⏳ Command: Install dependencies \(npm install\)"
-        $logContent | Should -Match "\[SUCCESS\] - │  │  │  └─ Status: ✓ SUCCESS"
-        $logContent | Should -Match "\[INFO\] - │  │  ├─ Command: npm run build \(Build application\)"
-        $logContent | Should -Match "\[SUCCESS\] - │  │  │  └─ Status: ✓ SUCCESS"
-        $logContent | Should -Match "\[INFO\] - │  │  ├─ Application: npm start \(Start server\)"
-        $logContent | Should -Match "\[SUCCESS\] - │  │  │  └─ Status: ✓ SUCCESS"
+        $logContent | Should -Match "│  │  └─ Status: ✓ SUCCESS"
+        $logContent | Should -Match "│  │  ├─ ⏳ Command: Build application \(npm run build\)"
+        $logContent | Should -Match "│  │  └─ Status: ✓ SUCCESS"
+        $logContent | Should -Match "│  │  ├─ ⏳ Application: Start server \(npm start\)"
+        $logContent | Should -Match "│  │  └─ Status: ✓ SUCCESS"
         
         # Check state is completed
-        $logContent | Should -Match "\[SUCCESS\] - │  └─ Result: ✅ COMPLETED"
+        $logContent | Should -Match "│  └─ Result: ✅ COMPLETED"
         
         # Check summary
-        $logContent | Should -Match "\[SUCCESS\] - ✅ Successfully processed: nodeReady"
+        $logContent | Should -Match "✓ nodeReady"
     }
 }

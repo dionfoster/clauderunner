@@ -36,7 +36,14 @@ function Start-StateProcessing {
         [string]$StateName,
         [string[]]$Dependencies = @()
     )
-      # Start tracking in state management
+    
+    # Automatically start state transitions if not already started
+    $summary = Get-SMStateSummary
+    if ($null -eq $summary.TotalStartTime) {
+        Start-StateTransitions
+    }
+    
+    # Start tracking in state management
     Start-SMStateProcessing -StateName $StateName -Dependencies $Dependencies
     
     $stateIcon = Get-SMStateIcon -StateName $StateName
@@ -113,13 +120,13 @@ function Write-StateCheckResult {
             $logMessage = "│  └─ Status: $(Get-StatusIcon 'Ready') Ready - $CheckType ($AdditionalInfo)"
         } else {
             $logMessage = "│  └─ Result: $(Get-StatusIcon 'Ready') READY (already ready via $($CheckType.ToLower()) check)"
-        }
-    } else {
+        }    } else {
         # Keep state in processing since we'll need to run actions
         Set-SMStateStatus -Status "Processing"
         
         # Format log message based on whether additional info was provided
-        if ($AdditionalInfo) {
+        # Use Status format only for specific status information, otherwise use Result format
+        if ($AdditionalInfo -and ($AdditionalInfo -like "*Status:*" -or $AdditionalInfo -notlike "*retry*")) {
             $logMessage = "│  └─ Status: $(Get-StatusIcon 'NotReady') Not Ready - $CheckType ($AdditionalInfo)"
         } else {
             $logMessage = "│  └─ Result: $(Get-StatusIcon 'NotReady') NOT READY (proceeding with actions)"
@@ -205,11 +212,24 @@ function Complete-StateAction {
         [Parameter(Mandatory=$true)]
         [bool]$Success,
         [string]$ErrorMessage = ""
-    )    # Complete action in state management
-    Complete-SMStateAction -StateName $StateName -ActionId $ActionId -Success $Success -ErrorMessage $ErrorMessage
+    )
     
-    $status = if ($Success) { "$(Get-StatusIcon 'Success')" } else { "$(Get-StatusIcon 'Error')" }
-    $message = "│  │  └─ Result: $status"
+    # Complete action in state management
+    Complete-SMStateAction -StateName $StateName -ActionId $ActionId -Success $Success -ErrorMessage $ErrorMessage
+      # Get the action to retrieve duration
+    $summary = Get-SMStateSummary
+    $action = $summary.States[$StateName].Actions | Where-Object { $_.Id -eq $ActionId }
+    
+    $statusIcon = if ($Success) { "$(Get-StatusIcon 'Success')" } else { "$(Get-StatusIcon 'Error')" }
+    $statusText = if ($Success) { "SUCCESS" } else { "FAILED" }
+    
+    $message = "│  │  └─ Status: $statusIcon $statusText"
+    
+    # Add duration if available
+    if ($action -and $action.Duration) {
+        $duration = [math]::Round($action.Duration.TotalSeconds, 1)
+        $message += " ($($duration)s)"
+    }
     
     if (-not $Success -and $ErrorMessage) {
         $message += " Error: $ErrorMessage"

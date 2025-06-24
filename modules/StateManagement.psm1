@@ -251,11 +251,18 @@ Returns information about all processed states.
 A hashtable containing information about all processed states.
 #>
 function Get-StateSummary {
+    $currentTime = Get-Date
+    $duration = if ($script:TotalStartTime) { 
+        $currentTime - $script:TotalStartTime 
+    } else { 
+        New-TimeSpan -Seconds 0 
+    }
+    
     return @{
         States = $script:ProcessedStates.Clone()
         TotalStartTime = $script:TotalStartTime
-        TotalEndTime = Get-Date
-        TotalDuration = (Get-Date) - $script:TotalStartTime
+        TotalEndTime = $currentTime
+        TotalDuration = $duration
     }
 }
 

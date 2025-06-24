@@ -171,7 +171,7 @@ Describe "State Visualization Module" {
             # Assert
             if (Test-Path $script:TestLogPath) {
                 $logContent = Get-Content -Path $script:TestLogPath -Raw
-                $logContent | Should -Match "Result: ✓"
+                $logContent | Should -Match "Status: ✓"
             } else {
                 "Log file doesn't exist" | Should -BeNullOrEmpty
             }
@@ -185,7 +185,7 @@ Describe "State Visualization Module" {
             # Assert
             if (Test-Path $script:TestLogPath) {
                 $logContent = Get-Content -Path $script:TestLogPath -Raw
-                $logContent | Should -Match "Result: ✗ Error: Package not found"
+                $logContent | Should -Match "Status: ✗ FAILED.*Error: Package not found"
             } else {
                 "Log file doesn't exist" | Should -BeNullOrEmpty
             }
