@@ -114,6 +114,14 @@ function Set-StateStatus {
     $latestState = $script:StateStartTimes.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First 1
     if ($latestState) {
         $script:ProcessedStates[$latestState.Key]["Status"] = $Status
+        
+        # Set Success field based on Status
+        if ($Status -eq "Completed") {
+            $script:ProcessedStates[$latestState.Key]["Success"] = $true
+        } elseif ($Status -eq "Failed") {
+            $script:ProcessedStates[$latestState.Key]["Success"] = $false
+        }
+        
         if ($Result) {
             $script:ProcessedStates[$latestState.Key]["Result"] = $Result
         }

@@ -587,17 +587,18 @@ Describe "State Machine Visualization - Summary" {
         }
         
         Start-StateTransitions
-        
-        # Set up multiple states with different statuses
+          # Set up multiple states with different statuses
         $scriptProcessedStates = @{
             "SuccessState" = @{
                 "Status" = "Completed"
+                "Success" = $true
                 "Dependencies" = @()
                 "Actions" = @()
                 "Duration" = 1.5
             }
             "FailedState" = @{
                 "Status" = "Failed" 
+                "Success" = $false
                 "Dependencies" = @()
                 "Actions" = @()
                 "Duration" = 0.5
@@ -612,10 +613,11 @@ Describe "State Machine Visualization - Summary" {
         Mock-ScriptVar -Name "TotalStartTime" -Value $startTime
     }
     
-    Context "Write-StateSummary" {
-        It "Logs a summary with successful and failed states" {
+    Context "Write-StateSummary" {        It "Logs a summary with successful and failed states" {
             # Act
-            Write-StateSummary -Success $false            # Assert
+            Write-StateSummary
+            
+            # Assert
             # Check log for summary header and state lists
             $logContent = Get-Content -Path $script:TestLogPath -Raw
             $logContent | Should -Match "EXECUTION SUMMARY"
@@ -628,11 +630,11 @@ Describe "State Machine Visualization - Summary" {
             $script:StateStartTimes | Should -BeNullOrEmpty
             $script:ProcessedStates | Should -BeNullOrEmpty
         }
-          It "Handles the case with only successful states" {
-            # Arrange - remove the failed state
+          It "Handles the case with only successful states" {            # Arrange - remove the failed state
             $scriptProcessedStates = @{
                 "SuccessState" = @{
                     "Status" = "Completed"
+                    "Success" = $true
                     "Dependencies" = @()
                     "Actions" = @()
                     "Duration" = 1.5
@@ -645,17 +647,17 @@ Describe "State Machine Visualization - Summary" {
             Mock-ScriptVar -Name "TotalStartTime" -Value $startTime
             
             # Act
-            Write-StateSummary -Success $true
+            Write-StateSummary
               # Assert
             $logContent = Get-Content -Path $script:TestLogPath -Raw
             $logContent | Should -Match "✓ SuccessState"
             $logContent | Should -Not -Match "✗.*Failed:"
         }
-          It "Handles the case with only failed states" {
-            # Arrange - only failed states
+          It "Handles the case with only failed states" {            # Arrange - only failed states
             $scriptProcessedStates = @{
                 "FailedState" = @{
                     "Status" = "Failed"
+                    "Success" = $false
                     "Dependencies" = @()
                     "Actions" = @()
                     "Duration" = 0.5
@@ -669,7 +671,7 @@ Describe "State Machine Visualization - Summary" {
             Mock-ScriptVar -Name "TotalStartTime" -Value $startTime
             
             # Act
-            Write-StateSummary -Success $false
+            Write-StateSummary
             
             # Assert
             $logContent = Get-Content -Path $script:TestLogPath -Raw
@@ -680,11 +682,11 @@ Describe "State Machine Visualization - Summary" {
             # Arrange - set a known start time
             $startTime = (Get-Date).AddSeconds(-5)
             Mock-ScriptVar -Name "TotalStartTime" -Value $startTime
-            
-            # Setup ProcessedStates for the test
+              # Setup ProcessedStates for the test
             $scriptProcessedStates = @{
                 "TestState" = @{
                     "Status" = "Completed"
+                    "Success" = $true
                     "Dependencies" = @()
                     "Actions" = @()
                     "Duration" = 2.5
@@ -693,7 +695,7 @@ Describe "State Machine Visualization - Summary" {
             Mock-ScriptVar -Name "ProcessedStates" -Value $scriptProcessedStates
             
             # Act
-            Write-StateSummary -Success $true
+            Write-StateSummary
             
             # Assert
             $logContent = Get-Content -Path $script:TestLogPath -Raw
@@ -728,13 +730,12 @@ Describe "State Machine Visualization - Summary" {
                 }
             }
             Mock-ScriptVar -Name "ProcessedStates" -Value $scriptProcessedStates
-            
-            # Set up start time
+              # Set up start time
             $startTime = (Get-Date).AddSeconds(-3)
             Mock-ScriptVar -Name "TotalStartTime" -Value $startTime
             
             # Act
-            Write-StateSummary -Success $true
+            Write-StateSummary
             
             # Assert - Check for correct ordering in log (dockerStartup, dockerReady, apiReady, nodeReady)
             $logContent = Get-Content -Path $script:TestLogPath -Raw
@@ -768,10 +769,9 @@ Describe "State Machine Visualization - Summary" {
             Mock-ScriptVar -Name "StateTransitionStarted" -Value $true
             Mock-ScriptVar -Name "TotalStartTime" -Value (Get-Date)
             Mock-ScriptVar -Name "StateStartTimes" -Value @{ "TestState" = (Get-Date) }
-            Mock-ScriptVar -Name "ActionStartTimes" -Value @{ "Action1" = (Get-Date) }
-            
+            Mock-ScriptVar -Name "ActionStartTimes" -Value @{ "Action1" = (Get-Date) }            
             # Act
-            Write-StateSummary -Success $true
+            Write-StateSummary
             
             # Assert all variables are reset
             $scriptStateTransitionStarted = Get-StateManagementVar -VarName "StateTransitionStarted"
@@ -810,11 +810,11 @@ Describe "State Machine Visualization - End-to-End Flow" {
         Write-StateCheck -CheckType "Command" -CheckDetails "test command"
         Write-StateCheckResult -IsReady $false -CheckType "Command"
         Start-StateActions -StateName "TestState"
-        $actionId = Start-StateAction -StateName "TestState" -ActionType "Command" -ActionCommand "test action"
-        Complete-StateAction -StateName "TestState" -ActionId $actionId -Success $true
+        $actionId = Start-StateAction -StateName "TestState" -ActionType "Command" -ActionCommand "test action"        Complete-StateAction -StateName "TestState" -ActionId $actionId -Success $true
         Complete-State -StateName "TestState" -Success $true
-        Write-StateSummary -Success $true
-          # Assert
+        Write-StateSummary
+        
+        # Assert
         # Check for correct sequence in log
         $logContent = Get-Content -Path $script:TestLogPath -Raw        # Check key elements individually to make the test more robust            $logContent | Should -Match "🔧 │  STATE TRANSITIONS:"
         $logContent | Should -Match "🔧 │  ┌─ STATE: 🔄 ⚙️ TestState"
@@ -832,11 +832,11 @@ Describe "State Machine Visualization - End-to-End Flow" {
         # Arrange & Act - Flow of a state that's already ready
         Start-StateTransitions
         Start-StateProcessing -StateName "TestState"
-        Write-StateCheck -CheckType "Command" -CheckDetails "test command"
-        Write-StateCheckResult -IsReady $true -CheckType "Command"
-        Write-StateSummary -Success $true
-          # Assert
-        $logContent = Get-Content -Path $script:TestLogPath -Raw        # Check key elements individually
+        Write-StateCheck -CheckType "Command" -CheckDetails "test command"        Write-StateCheckResult -IsReady $true -CheckType "Command"
+        Write-StateSummary
+        
+        # Assert
+        $logContent = Get-Content -Path $script:TestLogPath -Raw# Check key elements individually
         $logContent | Should -Match "🔧 │  ┌─ STATE: 🔄 ⚙️ TestState"
         $logContent | Should -Match "Check: 🔍 Command check"
         $logContent | Should -Match "Result: ✅ READY"
@@ -852,11 +852,12 @@ Describe "State Machine Visualization - End-to-End Flow" {
         Write-StateCheck -CheckType "Command" -CheckDetails "test command"
         Write-StateCheckResult -IsReady $false -CheckType "Command"
         Start-StateActions -StateName "TestState"
-        $actionId = Start-StateAction -StateName "TestState" -ActionType "Command" -ActionCommand "test action"
-        Complete-StateAction -StateName "TestState" -ActionId $actionId -Success $false -ErrorMessage "Action failed"
+        $actionId = Start-StateAction -StateName "TestState" -ActionType "Command" -ActionCommand "test action"        Complete-StateAction -StateName "TestState" -ActionId $actionId -Success $false -ErrorMessage "Action failed"
         Complete-State -StateName "TestState" -Success $false -ErrorMessage "State failed due to action error"
-        Write-StateSummary -Success $false
-          # Assert        $logContent = Get-Content -Path $script:TestLogPath -Raw
+        Write-StateSummary
+        
+        # Assert
+        $logContent = Get-Content -Path $script:TestLogPath -Raw
         # Check key elements individually
         $logContent | Should -Match "🔧 │  ┌─ STATE: 🔄 ⚙️ TestState"
         $logContent | Should -Match "Actions:"
@@ -886,12 +887,12 @@ Describe "State Machine Visualization - End-to-End Flow" {
         Complete-State -StateName "dockerReady" -Success $true
         
         # Third state: apiReady with dependency
-        Start-StateProcessing -StateName "apiReady" -Dependencies @("dockerReady")
-        Write-StateCheck -CheckType "Endpoint" -CheckDetails "http://localhost:8000/health"
+        Start-StateProcessing -StateName "apiReady" -Dependencies @("dockerReady")        Write-StateCheck -CheckType "Endpoint" -CheckDetails "http://localhost:8000/health"
         Write-StateCheckResult -IsReady $true -CheckType "Endpoint" -AdditionalInfo "Status: 200"
         
-        Write-StateSummary -Success $true
-          # Assert
+        Write-StateSummary
+        
+        # Assert
         $logContent = Get-Content -Path $script:TestLogPath -Raw
         
         # Check that all states are processed in the correct order
@@ -914,12 +915,11 @@ Describe "State Machine Visualization - End-to-End Flow" {
     }
     
     It "Handles endpoint checks with status codes" {
-        # Arrange & Act - Flow with endpoint check
-        Start-StateTransitions
+        # Arrange & Act - Flow with endpoint check        Start-StateTransitions
         Start-StateProcessing -StateName "apiReady"
         Write-StateCheck -CheckType "Endpoint" -CheckDetails "http://localhost:8000/health"
         Write-StateCheckResult -IsReady $true -CheckType "Endpoint" -AdditionalInfo "Status: 200"
-        Write-StateSummary -Success $true
+        Write-StateSummary
           # Assert
         $logContent = Get-Content -Path $script:TestLogPath -Raw        $logContent | Should -Match "🔧 │  ┌─ STATE: 🔄 🚀 apiReady"
         $logContent | Should -Match "Check: 🔍 Endpoint check"
@@ -942,11 +942,11 @@ Describe "State Machine Visualization - End-to-End Flow" {
         Complete-StateAction -StateName "nodeReady" -ActionId $actionId2 -Success $true
         
         $actionId3 = Start-StateAction -StateName "nodeReady" -ActionType "Application" -ActionCommand "npm start" -Description "Start server"
-        Complete-StateAction -StateName "nodeReady" -ActionId $actionId3 -Success $true
-        
+        Complete-StateAction -StateName "nodeReady" -ActionId $actionId3 -Success $true        
         Complete-State -StateName "nodeReady" -Success $true
-        Write-StateSummary -Success $true
-          # Assert
+        Write-StateSummary
+        
+        # Assert
         $logContent = Get-Content -Path $script:TestLogPath -Raw
         
         # Check all actions are logged correctly
