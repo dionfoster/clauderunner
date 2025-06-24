@@ -86,6 +86,37 @@ function Start-StateProcessing {
     $script:StateStartTimes[$StateName] = Get-Date
     $script:ProcessedStates[$StateName] = @{
         "Actions" = @()
+        "Dependencies" = $Dependencies
+        "Status" = "Processing"
+    }
+}
+
+<#
+.SYNOPSIS
+Sets the status of the current state being processed.
+
+.DESCRIPTION
+Updates the status and result of a state.
+
+.PARAMETER Status
+The status to set for the state.
+
+.PARAMETER Result
+Optional result message for the state.
+#>
+function Set-StateStatus {
+    param(
+        [string]$Status,
+        [string]$Result = ""
+    )
+    
+    # Get the most recently started state
+    $latestState = $script:StateStartTimes.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First 1
+    if ($latestState) {
+        $script:ProcessedStates[$latestState.Key]["Status"] = $Status
+        if ($Result) {
+            $script:ProcessedStates[$latestState.Key]["Result"] = $Result
+        }
     }
 }
 
@@ -105,17 +136,29 @@ The type of action being executed.
 function Register-StateAction {
     param(
         [string]$StateName,
-        [string]$ActionType
+        [string]$ActionType,
+        [string]$ActionCommand = "",
+        [string]$Description = ""
     )
     
     $actionId = [guid]::NewGuid().ToString()
     $script:ActionStartTimes[$actionId] = Get-Date
     
-    $script:ProcessedStates[$StateName].Actions += @{
+    $actionData = @{
         Id = $actionId
         Type = $ActionType
         StartTime = $script:ActionStartTimes[$actionId]
     }
+    
+    if ($ActionCommand) {
+        $actionData["Command"] = $ActionCommand
+    }
+    
+    if ($Description) {
+        $actionData["Description"] = $Description
+    }
+    
+    $script:ProcessedStates[$StateName].Actions += $actionData
     
     return $actionId
 }
@@ -140,7 +183,8 @@ function Complete-StateAction {
     param(
         [string]$StateName,
         [string]$ActionId,
-        [bool]$Success
+        [bool]$Success,
+        [string]$ErrorMessage = ""
     )
     
     $action = $script:ProcessedStates[$StateName].Actions | Where-Object { $_.Id -eq $ActionId }
@@ -148,6 +192,11 @@ function Complete-StateAction {
         $action.EndTime = Get-Date
         $action.Success = $Success
         $action.Duration = $action.EndTime - $action.StartTime
+        $action.Status = if ($Success) { "Success" } else { "Failed" }
+        
+        if ($ErrorMessage) {
+            $action.ErrorMessage = $ErrorMessage
+        }
     }
 }
 
@@ -167,13 +216,19 @@ Whether the state completed successfully.
 function Complete-State {
     param(
         [string]$StateName,
-        [bool]$Success
+        [bool]$Success,
+        [string]$ErrorMessage = ""
     )
     
     if ($script:ProcessedStates.ContainsKey($StateName)) {
         $script:ProcessedStates[$StateName].EndTime = Get-Date
         $script:ProcessedStates[$StateName].Success = $Success
         $script:ProcessedStates[$StateName].Duration = $script:ProcessedStates[$StateName].EndTime - $script:StateStartTimes[$StateName]
+        $script:ProcessedStates[$StateName].Status = if ($Success) { "Completed" } else { "Failed" }
+        
+        if ($ErrorMessage) {
+            $script:ProcessedStates[$StateName].ErrorMessage = $ErrorMessage
+        }
     }
 }
 
@@ -196,7 +251,23 @@ function Get-StateSummary {
     }
 }
 
+<#
+.SYNOPSIS
+Resets all state machine variables.
+
+.DESCRIPTION
+Clears all state tracking variables to prepare for a new run.
+#>
+function Reset-StateMachineVariables {
+    $script:StateTransitionStarted = $false
+    $script:StateStartTimes = @{}
+    $script:ActionStartTimes = @{}
+    $script:ProcessedStates = @{}
+    $script:TotalStartTime = $null
+}
+
 # Export module members
 Export-ModuleMember -Function Get-StateIcon, Start-StateTransitions, Start-StateProcessing,
-    Register-StateAction, Complete-StateAction, Complete-State, Get-StateSummary -Variable StateTransitionStarted,
+    Register-StateAction, Complete-StateAction, Complete-State, Get-StateSummary, 
+    Set-StateStatus, Reset-StateMachineVariables -Variable StateTransitionStarted,
     StateStartTimes, ActionStartTimes, ProcessedStates, TotalStartTime, StatusIcons

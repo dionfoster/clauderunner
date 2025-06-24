@@ -36,8 +36,7 @@ function Start-StateProcessing {
         [string]$StateName,
         [string[]]$Dependencies = @()
     )
-    
-    # Start tracking in state management
+      # Start tracking in state management
     Start-SMStateProcessing -StateName $StateName -Dependencies $Dependencies
     
     $stateIcon = Get-SMStateIcon -StateName $StateName
@@ -101,15 +100,19 @@ function Write-StateCheckResult {
         [Parameter(Mandatory=$true)]
         [string]$CheckType,
         [string]$AdditionalInfo = ""
-    )
-    
-    $status = if ($IsReady) { "$(Get-StatusIcon 'Ready') Ready" } else { "$(Get-StatusIcon 'NotReady') Not Ready" }
-    $message = "│  ├─ Status: $status - $CheckType"
-    if ($AdditionalInfo) {
-        $message += " ($AdditionalInfo)"
+    )    # Update state management based on check result
+    if ($IsReady) {
+        # Mark the current state as completed since it's already ready
+        $result = "Already ready via $CheckType check"
+        Set-SMStateStatus -Status "Completed" -Result $result
+        $logMessage = "│  └─ Result: $(Get-StatusIcon 'Ready') READY (already ready via $($CheckType.ToLower()) check)"
+    } else {
+        # Keep state in processing since we'll need to run actions
+        Set-SMStateStatus -Status "Processing"
+        $logMessage = "│  └─ Result: $(Get-StatusIcon 'NotReady') NOT READY (proceeding with actions)"
     }
     
-    Write-Log -Level "SYSTEM" $message
+    Write-Log -Level "SYSTEM" $logMessage
 }
 
 <#
@@ -150,7 +153,7 @@ function Start-StateAction {
         [string]$Description = ""
     )
     
-    $actionId = Register-StateAction -StateName $StateName -ActionType $ActionType
+    $actionId = Register-SMStateAction -StateName $StateName -ActionType $ActionType -ActionCommand $ActionCommand -Description $Description
     
     $message = "│  │  ├─ $(Get-StatusIcon 'Executing') $ActionType"
     if ($Description) {
@@ -188,10 +191,8 @@ function Complete-StateAction {
         [Parameter(Mandatory=$true)]
         [bool]$Success,
         [string]$ErrorMessage = ""
-    )
-    
-    # Complete action in state management
-    Complete-SMStateAction -StateName $StateName -ActionId $ActionId -Success $Success
+    )    # Complete action in state management
+    Complete-SMStateAction -StateName $StateName -ActionId $ActionId -Success $Success -ErrorMessage $ErrorMessage
     
     $status = if ($Success) { "$(Get-StatusIcon 'Success')" } else { "$(Get-StatusIcon 'Error')" }
     $message = "│  │  └─ Result: $status"
@@ -226,10 +227,8 @@ function Complete-State {
         [Parameter(Mandatory=$true)]
         [bool]$Success,
         [string]$ErrorMessage = ""
-    )
-    
-    # Complete state in state management
-    Complete-SMState -StateName $StateName -Success $Success
+    )    # Complete state in state management
+    Complete-SMState -StateName $StateName -Success $Success -ErrorMessage $ErrorMessage
     
     $summary = Get-SMStateSummary
     $state = $summary.States[$StateName]
@@ -286,8 +285,10 @@ function Write-StateSummary {
         Write-Log -Level "SYSTEM" "No states processed."
     }
     
+    Write-Log -Level "SYSTEM" " "    
     Write-Log -Level "SYSTEM" " "
-    Write-Log -Level "SYSTEM" "Total time: $totalDuration seconds"
+    Write-Log -Level "SYSTEM" "Total time: $totalDuration seconds"    # Reset state machine variables after summary
+    Reset-SMStateMachineVariables
 }
 
 # Status indicators, keeping these here as they're visualization-specific

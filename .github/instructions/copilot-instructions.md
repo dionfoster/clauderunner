@@ -72,3 +72,13 @@ applyTo: '**'
 - When fixing broken tests, focus on fixing the underlying issue, not just the test itself
 - When fixing broken tests, also focus on fixing the problem, not writing new tests
 - Before adding new tests, ensure that the existing tests are passing and the syntax is correct, DO NOT CONTINUE IF SYNTAX IS INCORRECT
+- The tests are run using Pester, so ensure that the tests are written in Pester syntax
+  - Use `Describe`, `Context`, and `It` blocks to structure tests
+    - Ensure the syntax is correct and the tests are passing before proceeding
+    - `Context` should be on a new line
+    - `Describe` should be on a new line
+    - `It` should be on a new line
+    - `BeforeEach` should be on a new line
+    - `AfterEach` should be on a new line
+  - Use `BeforeAll` and `AfterAll` for setup and teardown
+  
