@@ -79,7 +79,16 @@ Describe "State Machine Visualization - Basic Functions" {
 
 Describe "State Machine Visualization - State Transitions" {
     BeforeEach {
-        Initialize-StateMachineTest
+        # Reset log file for each test
+        if (Test-Path $script:TestLogPath) {
+            Remove-Item $script:TestLogPath -Force
+        }
+        New-Item -Path $script:TestLogPath -ItemType File -Force | Out-Null
+        
+        # Reset state machine variables if available
+        if (Get-Command -Name Reset-StateMachineVariables -ErrorAction SilentlyContinue) {
+            Reset-StateMachineVariables
+        }
     }
       Context "Start-StateTransitions" {
         It "Initializes the state machine" {
@@ -278,10 +287,9 @@ Describe "State Machine Visualization - State Transitions" {
             $logContent = Get-Content -Path $script:TestLogPath -Raw
             $logContent | Should -Match "│  └─ Result: ❌ NOT READY \(proceeding with actions\)"
         }
-        
-        It "Correctly formats endpoint success with status code" {
+          It "Correctly formats endpoint success with status code" {
             # Arrange
-            Initialize-StateMachineTest
+            Start-StateTransitions
             Start-StateProcessing -StateName "TestState"
             
             # Initialize ProcessedStates for this test
@@ -309,7 +317,17 @@ Describe "State Machine Visualization - State Transitions" {
 
 Describe "State Machine Visualization - Actions" {
     BeforeEach {
-        Initialize-StateMachineTest
+        # Reset log file for each test
+        if (Test-Path $script:TestLogPath) {
+            Remove-Item $script:TestLogPath -Force
+        }
+        New-Item -Path $script:TestLogPath -ItemType File -Force | Out-Null
+        
+        # Reset state machine variables if available
+        if (Get-Command -Name Reset-StateMachineVariables -ErrorAction SilentlyContinue) {
+            Reset-StateMachineVariables
+        }
+        
         Start-StateTransitions
         Start-StateProcessing -StateName "TestState"
     }
@@ -337,9 +355,21 @@ Describe "State Machine Visualization - Actions" {
             $logContent | Should -Match "│  ├─ Actions: ⏳ EXECUTING"
         }
     }
-      Context "Start-StateAction" {
+    
+    Context "Start-StateAction" {
         BeforeEach {
-            Initialize-StateMachineTest
+            # Reset log file for each test
+            if (Test-Path $script:TestLogPath) {
+                Remove-Item $script:TestLogPath -Force
+            }
+            New-Item -Path $script:TestLogPath -ItemType File -Force | Out-Null
+            
+            # Reset state machine variables if available
+            if (Get-Command -Name Reset-StateMachineVariables -ErrorAction SilentlyContinue) {
+                Reset-StateMachineVariables
+            }
+            
+            Start-StateTransitions
             Start-StateProcessing -StateName "TestState"
             
             # Initialize ProcessedStates for testing
@@ -417,10 +447,20 @@ Describe "State Machine Visualization - Actions" {
             $logContent = Get-Content -Path $script:TestLogPath -Raw
             $logContent | Should -Match "Command: docker run -p 8000:8000 -v"
         }
-    }
-      Context "Complete-StateAction" {
+    }    Context "Complete-StateAction" {
         BeforeEach {
-            Initialize-StateMachineTest
+            # Reset log file for each test
+            if (Test-Path $script:TestLogPath) {
+                Remove-Item $script:TestLogPath -Force
+            }
+            New-Item -Path $script:TestLogPath -ItemType File -Force | Out-Null
+            
+            # Reset state machine variables if available
+            if (Get-Command -Name Reset-StateMachineVariables -ErrorAction SilentlyContinue) {
+                Reset-StateMachineVariables
+            }
+            
+            Start-StateTransitions
             Start-StateProcessing -StateName "TestState"
             
             # Initialize ProcessedStates for testing
@@ -529,10 +569,20 @@ Describe "State Machine Visualization - Actions" {
             $logContent | Should -Not -Match "│  │  │     └─ Error:"
         }
     }
-    
-    Context "Complete-State" {
+      Context "Complete-State" {
         BeforeEach {
-            Initialize-StateMachineTest
+            # Reset log file for each test
+            if (Test-Path $script:TestLogPath) {
+                Remove-Item $script:TestLogPath -Force
+            }
+            New-Item -Path $script:TestLogPath -ItemType File -Force | Out-Null
+            
+            # Reset state machine variables if available
+            if (Get-Command -Name Reset-StateMachineVariables -ErrorAction SilentlyContinue) {
+                Reset-StateMachineVariables
+            }
+            
+            Start-StateTransitions
             Start-StateProcessing -StateName "TestState"
             
             # Initialize ProcessedStates for testing
@@ -620,7 +670,17 @@ Describe "State Machine Visualization - Actions" {
 
 Describe "State Machine Visualization - Summary" {
     BeforeEach {
-        Initialize-StateMachineTest
+        # Reset log file for each test
+        if (Test-Path $script:TestLogPath) {
+            Remove-Item $script:TestLogPath -Force
+        }
+        New-Item -Path $script:TestLogPath -ItemType File -Force | Out-Null
+        
+        # Reset state machine variables if available
+        if (Get-Command -Name Reset-StateMachineVariables -ErrorAction SilentlyContinue) {
+            Reset-StateMachineVariables
+        }
+        
         Start-StateTransitions
         
         # Set up multiple states with different statuses
@@ -828,7 +888,16 @@ Describe "State Machine Visualization - Summary" {
 
 Describe "State Machine Visualization - End-to-End Flow" {
     BeforeEach {
-        Initialize-StateMachineTest
+        # Reset log file for each test
+        if (Test-Path $script:TestLogPath) {
+            Remove-Item $script:TestLogPath -Force
+        }
+        New-Item -Path $script:TestLogPath -ItemType File -Force | Out-Null
+        
+        # Reset state machine variables if available
+        if (Get-Command -Name Reset-StateMachineVariables -ErrorAction SilentlyContinue) {
+            Reset-StateMachineVariables
+        }
     }
     
     It "Handles a complete successful state flow" {
