@@ -100,16 +100,30 @@ function Write-StateCheckResult {
         [Parameter(Mandatory=$true)]
         [string]$CheckType,
         [string]$AdditionalInfo = ""
-    )    # Update state management based on check result
+    )
+    
+    # Update state management based on check result
     if ($IsReady) {
         # Mark the current state as completed since it's already ready
         $result = "Already ready via $CheckType check"
         Set-SMStateStatus -Status "Completed" -Result $result
-        $logMessage = "│  └─ Result: $(Get-StatusIcon 'Ready') READY (already ready via $($CheckType.ToLower()) check)"
+        
+        # Format log message based on whether additional info was provided
+        if ($AdditionalInfo) {
+            $logMessage = "│  └─ Status: $(Get-StatusIcon 'Ready') Ready - $CheckType ($AdditionalInfo)"
+        } else {
+            $logMessage = "│  └─ Result: $(Get-StatusIcon 'Ready') READY (already ready via $($CheckType.ToLower()) check)"
+        }
     } else {
         # Keep state in processing since we'll need to run actions
         Set-SMStateStatus -Status "Processing"
-        $logMessage = "│  └─ Result: $(Get-StatusIcon 'NotReady') NOT READY (proceeding with actions)"
+        
+        # Format log message based on whether additional info was provided
+        if ($AdditionalInfo) {
+            $logMessage = "│  └─ Status: $(Get-StatusIcon 'NotReady') Not Ready - $CheckType ($AdditionalInfo)"
+        } else {
+            $logMessage = "│  └─ Result: $(Get-StatusIcon 'NotReady') NOT READY (proceeding with actions)"
+        }
     }
     
     Write-Log -Level "SYSTEM" $logMessage
