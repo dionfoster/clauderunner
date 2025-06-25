@@ -22,7 +22,7 @@ BeforeAll {
 
 AfterAll {
     # Clean up test environment
-    Cleanup-TestEnvironment
+    Remove-TestEnvironment
     
     # Remove test config file
     if (Test-Path $script:TestConfigPath) {

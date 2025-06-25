@@ -605,11 +605,11 @@ Describe "State Machine Visualization - Summary" {
             }
         }
         
-        Mock-ScriptVar -Name "ProcessedStates" -Value $scriptProcessedStates
+        Set-ScriptVariableMock -Name "ProcessedStates" -Value $scriptProcessedStates
         
         # Set up start time
         $startTime = (Get-Date).AddSeconds(-3)
-        Mock-ScriptVar -Name "TotalStartTime" -Value $startTime
+        Set-ScriptVariableMock -Name "TotalStartTime" -Value $startTime
     }
     
     Context "Write-StateSummary" {        It "Logs a summary with successful and failed states" {
@@ -639,11 +639,11 @@ Describe "State Machine Visualization - Summary" {
                     "Duration" = 1.5
                 }
             }
-            Mock-ScriptVar -Name "ProcessedStates" -Value $scriptProcessedStates
+            Set-ScriptVariableMock -Name "ProcessedStates" -Value $scriptProcessedStates
             
             # Set up start time
             $startTime = (Get-Date).AddSeconds(-3)
-            Mock-ScriptVar -Name "TotalStartTime" -Value $startTime
+            Set-ScriptVariableMock -Name "TotalStartTime" -Value $startTime
             
             # Act
             Write-StateSummary
@@ -663,11 +663,11 @@ Describe "State Machine Visualization - Summary" {
                     "ErrorMessage" = "Test error"
                 }
             }
-            Mock-ScriptVar -Name "ProcessedStates" -Value $scriptProcessedStates
+            Set-ScriptVariableMock -Name "ProcessedStates" -Value $scriptProcessedStates
             
             # Set up start time
             $startTime = (Get-Date).AddSeconds(-3)
-            Mock-ScriptVar -Name "TotalStartTime" -Value $startTime
+            Set-ScriptVariableMock -Name "TotalStartTime" -Value $startTime
             
             # Act
             Write-StateSummary
@@ -680,7 +680,7 @@ Describe "State Machine Visualization - Summary" {
           It "Properly calculates total execution time" {
             # Arrange - set a known start time
             $startTime = (Get-Date).AddSeconds(-5)
-            Mock-ScriptVar -Name "TotalStartTime" -Value $startTime
+            Set-ScriptVariableMock -Name "TotalStartTime" -Value $startTime
               # Setup ProcessedStates for the test
             $scriptProcessedStates = @{
                 "TestState" = @{
@@ -691,7 +691,7 @@ Describe "State Machine Visualization - Summary" {
                     "Duration" = 2.5
                 }
             }
-            Mock-ScriptVar -Name "ProcessedStates" -Value $scriptProcessedStates
+            Set-ScriptVariableMock -Name "ProcessedStates" -Value $scriptProcessedStates
             
             # Act
             Write-StateSummary
@@ -728,10 +728,10 @@ Describe "State Machine Visualization - Summary" {
                     "Duration" = 0.8
                 }
             }
-            Mock-ScriptVar -Name "ProcessedStates" -Value $scriptProcessedStates
+            Set-ScriptVariableMock -Name "ProcessedStates" -Value $scriptProcessedStates
               # Set up start time
             $startTime = (Get-Date).AddSeconds(-3)
-            Mock-ScriptVar -Name "TotalStartTime" -Value $startTime
+            Set-ScriptVariableMock -Name "TotalStartTime" -Value $startTime
             
             # Act
             Write-StateSummary
@@ -764,11 +764,11 @@ Describe "State Machine Visualization - Summary" {
                     "Actions" = @()
                 }
             }
-            Mock-ScriptVar -Name "ProcessedStates" -Value $scriptProcessedStates
-            Mock-ScriptVar -Name "StateTransitionStarted" -Value $true
-            Mock-ScriptVar -Name "TotalStartTime" -Value (Get-Date)
-            Mock-ScriptVar -Name "StateStartTimes" -Value @{ "TestState" = (Get-Date) }
-            Mock-ScriptVar -Name "ActionStartTimes" -Value @{ "Action1" = (Get-Date) }            
+            Set-ScriptVariableMock -Name "ProcessedStates" -Value $scriptProcessedStates
+            Set-ScriptVariableMock -Name "StateTransitionStarted" -Value $true
+            Set-ScriptVariableMock -Name "TotalStartTime" -Value (Get-Date)
+            Set-ScriptVariableMock -Name "StateStartTimes" -Value @{ "TestState" = (Get-Date) }
+            Set-ScriptVariableMock -Name "ActionStartTimes" -Value @{ "Action1" = (Get-Date) }            
             # Act
             Write-StateSummary
             

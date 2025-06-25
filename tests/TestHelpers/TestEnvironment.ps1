@@ -30,6 +30,22 @@ $global:StatusIcons = @{
     "NotReady"    = "❌"
 }
 
+<#
+.SYNOPSIS
+Common test patterns and constants used across test files.
+#>
+$global:CommonTestPatterns = @{
+    StateHeader = "┌─ STATE: 🔄"
+    DependenciesNone = "Dependencies: none"
+    ActionsHeader = "Actions:"
+    StateTransitions = "STATE TRANSITIONS:"
+    ExecutionSummary = "EXECUTION SUMMARY"
+    ResultCompleted = "Result: ✅ COMPLETED"
+    ResultFailed = "Result: ❌ FAILED"
+    StatusSuccess = "Status: ✓ SUCCESS"
+    StatusFailed = "Status: ✗ FAILED"
+}
+
 function global:Initialize-TestEnvironment {
     # Initialize test state
     Reset-StateMachineVariables
@@ -62,7 +78,7 @@ function global:Reset-LogFile {
     }
 }
 
-function global:Cleanup-TestEnvironment {
+function global:Remove-TestEnvironment {
     # Clean up test log files
     if (Test-Path $script:TestLogPath) {
         Remove-Item $script:TestLogPath -Force
@@ -123,7 +139,7 @@ function global:Test-LogContains {
     return $logContent -match $Pattern
 }
 
-function global:Mock-ScriptVar {
+function global:Set-ScriptVariableMock {
     param (
         [Parameter(Mandatory=$true)]
         [string]$Name,

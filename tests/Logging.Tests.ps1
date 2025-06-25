@@ -12,7 +12,7 @@ BeforeAll {
 
 AfterAll {
     # Clean up test environment
-    Cleanup-TestEnvironment
+    Remove-TestEnvironment
 }
 
 Describe "Logging Module" {

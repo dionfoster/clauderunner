@@ -15,7 +15,7 @@ BeforeAll {
 
 AfterAll {
     # Clean up test environment
-    Cleanup-TestEnvironment
+    Remove-TestEnvironment
 }
 
 Describe "CommandExecution Module" {    Context "Test-OutputForErrors" {

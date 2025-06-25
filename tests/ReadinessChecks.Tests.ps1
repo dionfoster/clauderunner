@@ -34,7 +34,7 @@ BeforeAll {
 
 AfterAll {
     # Clean up test environment
-    Cleanup-TestEnvironment
+    Remove-TestEnvironment
 }
 
 Describe "ReadinessChecks Module" {    Context "Test-CommandAvailable for Docker" {

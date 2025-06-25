@@ -97,47 +97,15 @@ function Test-EndpointReadiness {
         [Parameter(Mandatory=$false)]
         [switch]$Quiet
     )
-      $attempt = 0
-    $successCount = 0
-    $startTime = Get-Date
     
     $pollingDetails = "Polling endpoint: $Uri (max $MaxRetries tries, ${RetryInterval}s interval, need $SuccessfulRetries successes, timeout ${MaxTimeSeconds}s)"
-    $actionId = StateVisualization\Start-StateAction -StateName $StateName -ActionType "Command" -ActionCommand "Endpoint polling" -Description $pollingDetails
     
-    # Remove the unused $finalSuccess variable
+    # Create a scriptblock that tests the endpoint
+    $pollingFunction = {
+        Test-WebEndpoint -Uri $Uri -StateName $StateName
+    }
     
-    do {
-        $attempt++
-        $elapsed = [int]((Get-Date) - $startTime).TotalSeconds
-        
-        $success = Test-WebEndpoint -Uri $Uri -StateName $StateName
-        
-        if ($success) {
-            $successCount++
-              if ($successCount -ge $SuccessfulRetries) {
-                StateVisualization\Complete-StateAction -StateName $StateName -ActionId $actionId -Success $true
-                return $true
-            }
-        } else {
-            $successCount = 0  # Reset on failure
-        }
-          # Check if we have exceeded time limit
-        if ($elapsed -ge $MaxTimeSeconds) {
-            StateVisualization\Complete-StateAction -StateName $StateName -ActionId $actionId -Success $false -ErrorMessage "Timed out after ${elapsed}s"
-            return $false
-        }
-          # Check if we have exceeded retry limit
-        if ($attempt -ge $MaxRetries) {
-            StateVisualization\Complete-StateAction -StateName $StateName -ActionId $actionId -Success $false -ErrorMessage "Max retries ($MaxRetries) exceeded"
-            return $false
-        }
-        
-        # Wait before next attempt
-        if ($attempt -lt $MaxRetries -and $elapsed -lt $MaxTimeSeconds) {
-            Start-Sleep $RetryInterval
-        }
-        
-    } while ($true)
+    return Invoke-PollingCheck -PollingFunction $pollingFunction -StateName $StateName -ActionType "Command" -ActionCommand "Endpoint polling" -Description $pollingDetails -MaxRetries $MaxRetries -RetryInterval $RetryInterval -SuccessfulRetries $SuccessfulRetries -MaxTimeSeconds $MaxTimeSeconds
 }
 
 <#
@@ -199,35 +167,28 @@ function Test-ContinueAfter {
         [switch]$Quiet
     )
     
-    $attempt = 0
-    $successCount = 0
-    $startTime = Get-Date
-    
     # Use configuration values if provided
     if ($StateConfig -and $StateConfig.readiness) {
         if ($StateConfig.readiness.maxRetries) { $MaxRetries = $StateConfig.readiness.maxRetries }
         if ($StateConfig.readiness.retryInterval) { $RetryInterval = $StateConfig.readiness.retryInterval }
         if ($StateConfig.readiness.successfulRetries) { $SuccessfulRetries = $StateConfig.readiness.successfulRetries }
         if ($StateConfig.readiness.maxTimeSeconds) { $MaxTimeSeconds = $StateConfig.readiness.maxTimeSeconds }
-    }    # Create a "polling" action for the command check
-    $pollingDetails = "Polling command: $Command (max $MaxRetries tries, ${RetryInterval}s interval, need $SuccessfulRetries successes, timeout ${MaxTimeSeconds}s)"
-    $actionId = StateVisualization\Start-StateAction -StateName $StateName -ActionType "Command" -ActionCommand "Command polling" -Description $pollingDetails
+    }
     
     # Check if this is an endpoint check - use the helper function
     $endpointUri = Get-EndpointUri -StateConfig $StateConfig -ForWaiting
     $isEndpointCheck = $null -ne $endpointUri
     
-    do {
-        $attempt++
-        $elapsed = [int]((Get-Date) - $startTime).TotalSeconds
-        
-        $success = $false
-        
-        if ($isEndpointCheck) {
-            # Handle endpoint check
-            $success = Test-WebEndpoint -Uri $endpointUri -StateName $StateName
-        } else {
-            # Handle normal command
+    if ($isEndpointCheck) {
+        # Handle endpoint check using the existing Test-EndpointReadiness function
+        $pollingDetails = "Polling endpoint: $endpointUri (max $MaxRetries tries, ${RetryInterval}s interval, need $SuccessfulRetries successes, timeout ${MaxTimeSeconds}s)"
+        $pollingFunction = {
+            Test-WebEndpoint -Uri $endpointUri -StateName $StateName
+        }
+    } else {
+        # Handle normal command
+        $pollingDetails = "Polling command: $Command (max $MaxRetries tries, ${RetryInterval}s interval, need $SuccessfulRetries successes, timeout ${MaxTimeSeconds}s)"
+        $pollingFunction = {
             try {
                 $output = Invoke-Expression $Command 2>&1 
                 $success = $LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq $null
@@ -238,39 +199,15 @@ function Test-ContinueAfter {
                         $success = $false
                     }
                 }
+                return $success
             }
             catch {
-                $success = $false
+                return $false
             }
         }
-          if ($success) {
-            $successCount++
-            
-            if ($successCount -ge $SuccessfulRetries) {
-                StateVisualization\Complete-StateAction -StateName $StateName -ActionId $actionId -Success $true
-                return $true
-            }
-        } else {
-            $successCount = 0  # Reset on failure
-        }
-          # Check if we have exceeded time limit
-        if ($elapsed -ge $MaxTimeSeconds) {
-            StateVisualization\Complete-StateAction -StateName $StateName -ActionId $actionId -Success $false -ErrorMessage "Timed out after ${elapsed}s"
-            return $false
-        }
-        
-        # Check if we have exceeded retry limit
-        if ($attempt -ge $MaxRetries) {
-            StateVisualization\Complete-StateAction -StateName $StateName -ActionId $actionId -Success $false -ErrorMessage "Max retries ($MaxRetries) exceeded"
-            return $false
-        }
-        
-        # Wait before next attempt
-        if ($attempt -lt $MaxRetries -and $elapsed -lt $MaxTimeSeconds) {
-            Start-Sleep $RetryInterval
-        }
-        
-    } while ($true)
+    }
+    
+    return Invoke-PollingCheck -PollingFunction $pollingFunction -StateName $StateName -ActionType "Command" -ActionCommand "Command polling" -Description $pollingDetails -MaxRetries $MaxRetries -RetryInterval $RetryInterval -SuccessfulRetries $SuccessfulRetries -MaxTimeSeconds $MaxTimeSeconds
 }
 
 <#
@@ -497,10 +434,121 @@ function Test-EndpointPath {
     }
 }
 
+<#
+.SYNOPSIS
+Common polling logic for readiness checks with retry and timeout handling.
+
+.DESCRIPTION
+Implements the common polling pattern used by both endpoint and command readiness checks.
+Handles retry logic, timeout checking, success counting, and state visualization.
+
+.PARAMETER PollingFunction
+A scriptblock that performs the actual check operation. Should return $true for success, $false for failure.
+
+.PARAMETER StateName
+The name of the state for logging.
+
+.PARAMETER ActionType
+The type of action for logging (e.g., "Endpoint polling", "Command polling").
+
+.PARAMETER ActionCommand
+The command description for logging.
+
+.PARAMETER Description
+Additional description for the polling operation.
+
+.PARAMETER MaxRetries
+The maximum number of retries.
+
+.PARAMETER RetryInterval
+The interval between retries in seconds.
+
+.PARAMETER SuccessfulRetries
+The number of successful retries required.
+
+.PARAMETER MaxTimeSeconds
+The maximum time to wait in seconds.
+
+.OUTPUTS
+Returns $true if the polling succeeds, $false otherwise.
+#>
+function Invoke-PollingCheck {
+    param(
+        [Parameter(Mandatory=$true)]
+        [scriptblock]$PollingFunction,
+        
+        [Parameter(Mandatory=$true)]
+        [string]$StateName,
+        
+        [Parameter(Mandatory=$true)]
+        [string]$ActionType,
+        
+        [Parameter(Mandatory=$true)]
+        [string]$ActionCommand,
+        
+        [Parameter(Mandatory=$true)]
+        [string]$Description,
+        
+        [Parameter(Mandatory=$false)]
+        [int]$MaxRetries = 10,
+        
+        [Parameter(Mandatory=$false)]
+        [int]$RetryInterval = 3,
+        
+        [Parameter(Mandatory=$false)]
+        [int]$SuccessfulRetries = 1,
+        
+        [Parameter(Mandatory=$false)]
+        [int]$MaxTimeSeconds = 30
+    )
+    
+    $attempt = 0
+    $successCount = 0
+    $startTime = Get-Date
+    
+    $actionId = StateVisualization\Start-StateAction -StateName $StateName -ActionType $ActionType -ActionCommand $ActionCommand -Description $Description
+    
+    do {
+        $attempt++
+        $elapsed = [int]((Get-Date) - $startTime).TotalSeconds
+        
+        # Execute the polling function
+        $success = & $PollingFunction
+        
+        if ($success) {
+            $successCount++
+            if ($successCount -ge $SuccessfulRetries) {
+                StateVisualization\Complete-StateAction -StateName $StateName -ActionId $actionId -Success $true
+                return $true
+            }
+        } else {
+            $successCount = 0  # Reset on failure
+        }
+        
+        # Check if we have exceeded time limit
+        if ($elapsed -ge $MaxTimeSeconds) {
+            StateVisualization\Complete-StateAction -StateName $StateName -ActionId $actionId -Success $false -ErrorMessage "Timed out after ${elapsed}s"
+            return $false
+        }
+        
+        # Check if we have exceeded retry limit
+        if ($attempt -ge $MaxRetries) {
+            StateVisualization\Complete-StateAction -StateName $StateName -ActionId $actionId -Success $false -ErrorMessage "Max retries ($MaxRetries) exceeded"
+            return $false
+        }
+        
+        # Wait before next attempt
+        if ($attempt -lt $MaxRetries -and $elapsed -lt $MaxTimeSeconds) {
+            Start-Sleep $RetryInterval
+        }
+        
+    } while ($true)
+}
+
 # Implement the specific functions using the generic ones
 
 # Export the functions
-Export-ModuleMember -Function Test-WebEndpoint, Test-EndpointReadiness, Test-ContinueAfter, Test-PreCheck, Get-EndpointUri, Test-CommandAvailable, Test-ServiceRunning, Test-EndpointPath
+Export-ModuleMember -Function Test-WebEndpoint, Test-EndpointReadiness, Test-ContinueAfter, Test-PreCheck, Get-EndpointUri, Test-CommandAvailable, Test-ServiceRunning, Test-EndpointPath, Invoke-PollingCheck
 
 
 
