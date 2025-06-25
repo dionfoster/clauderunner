@@ -1,12 +1,11 @@
-[17:21:51] [INFO] ▶️ Claude Task Runner (Target: nodeReady)
-[17:21:51] [INFO] 📋 Configuration loaded from claude.yml
+▶️ Claude Task Runner (Target: nodeReady)
+📋 Configuration loaded from claude.yml
 
 STATE TRANSITIONS:
-┌─ STATE: 🔄 dockerStartup
+┌─ STATE: 🔄 firstState
 │  ├─ Dependencies: none
 │  ├─ Check: 🔍 Command check (docker info)
 │  └─ Result: ❌ NOT READY (proceeding with actions)
-
 │  ├─ Actions: ⏳ EXECUTING
 │  │  └─ Application: Starting Docker Desktop
 │  │     └─ Status: ✓ SUCCESS (4.2s)
@@ -14,11 +13,10 @@ STATE TRANSITIONS:
 │  │  └─ Status: ✓ SUCCESS after 3 retries (9.5s)
 │  └─ Result: ✅ COMPLETED (13.7s)
 
-┌─ STATE: 🔄 dockerReady
-│  ├─ Dependencies: dockerStartup ✓
+┌─ STATE: 🔄 secondState
+│  ├─ Dependencies: firstState ✓
 │  ├─ Check: 🔍 Command check (docker info)
 │  └─ Result: ❌ NOT READY (proceeding with actions)
-
 │  ├─ Actions: ⏳ EXECUTING
 │  │  ├─ Command: docker start postgres
 │  │  │  └─ Status: ✓ SUCCESS (1.2s)
@@ -27,7 +25,10 @@ STATE TRANSITIONS:
 │  │        └─ Error: Container rabbitmq not found
 │  └─ Result: ❌ FAILED (Error starting container)
 
-SUMMARY:
-✅ Successfully processed: dockerStartup
-❌ Failed: dockerReady
-⏱️ Total time: 17.0s
+EXECUTION SUMMARY
+----------------
+✓ firstState (4.1s)
+X secondState (4.1s)
+
+❌ Failed: 1/2 tasks completed
+⏱️ Total time: 11.0s

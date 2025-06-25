@@ -2,23 +2,23 @@
 📋 Configuration loaded from claude.yml
 
 STATE TRANSITIONS:
-┌─ STATE: 🔄 dockerStartup
+┌─ STATE: 🔄 firstState
 │  ├─ Dependencies: none
 │  ├─ Check: 🔍 Command check (docker info)
 │  └─ Result: ✅ READY (already ready via command check)
 
-┌─ STATE: 🔄 dockerReady
-│  ├─ Dependencies: dockerStartup ✓
+┌─ STATE: 🔄 secondState
+│  ├─ Dependencies: firstState ✓
 │  ├─ Check: 🔍 Command check (docker info)
 │  └─ Result: ✅ READY (already ready via command check)
 
-┌─ STATE: 🔄 apiReady
-│  ├─ Dependencies: dockerReady ✓
+┌─ STATE: 🔄 thirdState
+│  ├─ Dependencies: secondState ✓
 │  ├─ Check: 🔍 Endpoint check (https://localhost:5001/healthcheck)
 │  └─ Result: ✅ READY (endpoint status: 200 OK)
 
-┌─ STATE: 🔄 nodeReady
-│  ├─ Dependencies: apiReady ✓
+┌─ STATE: 🔄 fourthState
+│  ├─ Dependencies: thirdState ✓
 │  ├─ Actions: ⏳ EXECUTING
 │  │  ├─ Command: Set-NodeVersion -Version v22.16.0
 │  │  │  └─ Status: ✓ SUCCESS (0.3s)
@@ -30,6 +30,12 @@ STATE TRANSITIONS:
 │  │     └─ Status: ✓ SUCCESS (0.2s)
 │  └─ Result: ✅ COMPLETED (7.0s)
 
-SUMMARY:
-✅ Successfully processed: dockerStartup, dockerReady, apiReady, nodeReady
+EXECUTION SUMMARY
+----------------
+✓ firstState (4.1s)
+✓ secondState (4.1s)
+✓ thirdState (3.6s)
+✓ fourthState (3.6s)
+
+✅ Success: 4/4 tasks completed
 ⏱️ Total time: 11.0s
