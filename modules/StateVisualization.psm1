@@ -300,7 +300,10 @@ function Write-StateSummary {
     
     # Check if we have any states
     if ($summary.States.Count -gt 0) {
-        foreach ($state in $summary.States.GetEnumerator()) {
+        # Sort states by their start time (execution order)
+        $sortedStates = $summary.States.GetEnumerator() | Sort-Object { $summary.StateStartTimes[$_.Key] }
+        
+        foreach ($state in $sortedStates) {
             $status = if ($state.Value.Success) { "$(Get-StatusIcon 'Success')" } else { "$(Get-StatusIcon 'Error')" }
             
             # Handle potential null Duration

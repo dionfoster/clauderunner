@@ -2,11 +2,13 @@
 BeforeAll {
     # Set up test log path
     $script:TestLogPath = Join-Path $TestDrive "test.log"
-    
-    # Import modules directly in dependency order
+      # Import modules directly in dependency order
     Import-Module "$PSScriptRoot\..\modules\Logging.psm1" -Force
     Import-Module "$PSScriptRoot\..\modules\StateManagement.psm1" -Force
     Import-Module "$PSScriptRoot\..\modules\StateVisualization.psm1" -Force
+    
+    # Import test helpers
+    . "$PSScriptRoot\TestHelpers\TestEnvironment.ps1"
     
     # Initialize log file
     New-Item -Path $script:TestLogPath -ItemType File -Force | Out-Null
@@ -612,7 +614,9 @@ Describe "State Machine Visualization - Summary" {
         Set-ScriptVariableMock -Name "TotalStartTime" -Value $startTime
     }
     
-    Context "Write-StateSummary" {        It "Logs a summary with successful and failed states" {
+    Context "Write-StateSummary" {
+        
+        It "Logs a summary with successful and failed states" {
             # Act
             Write-StateSummary
             
@@ -677,7 +681,8 @@ Describe "State Machine Visualization - Summary" {
             $logContent | Should -Not -Match "\[SUCCESS\] - ✅ Successfully processed:"
             $logContent | Should -Match "✗ FailedState"
         }
-          It "Properly calculates total execution time" {
+        
+        It "Properly calculates total execution time" {
             # Arrange - set a known start time
             $startTime = (Get-Date).AddSeconds(-5)
             Set-ScriptVariableMock -Name "TotalStartTime" -Value $startTime
@@ -700,37 +705,54 @@ Describe "State Machine Visualization - Summary" {
             $logContent = Get-Content -Path $script:TestLogPath -Raw
             $logContent | Should -Match "Total time: 5\.?\d* seconds"
         }
-          It "Sorts states according to standard order" {
-            # Arrange - Create ProcessedStates with states in non-standard order
+        
+        It "Sorts states by execution order (start time)" {
+            # Arrange - Create ProcessedStates with states in non-chronological order
+            $baseTime = Get-Date
             $scriptProcessedStates = @{
                 "nodeReady" = @{
                     "Status" = "Completed"
+                    "Success" = $true
                     "Dependencies" = @()
                     "Actions" = @()
-                    "Duration" = 1.0
+                    "Duration" = New-TimeSpan -Seconds 1.0
                 }
                 "dockerStartup" = @{
                     "Status" = "Completed"
+                    "Success" = $true
                     "Dependencies" = @()
                     "Actions" = @()
-                    "Duration" = 0.5
+                    "Duration" = New-TimeSpan -Seconds 0.5
                 }
                 "apiReady" = @{
                     "Status" = "Completed"
+                    "Success" = $true
                     "Dependencies" = @()
                     "Actions" = @()
-                    "Duration" = 1.5
+                    "Duration" = New-TimeSpan -Seconds 1.5
                 }
                 "dockerReady" = @{
                     "Status" = "Completed"
+                    "Success" = $true
                     "Dependencies" = @()
                     "Actions" = @()
-                    "Duration" = 0.8
+                    "Duration" = New-TimeSpan -Seconds 0.8
                 }
             }
             Set-ScriptVariableMock -Name "ProcessedStates" -Value $scriptProcessedStates
-              # Set up start time
-            $startTime = (Get-Date).AddSeconds(-3)
+            
+            # Set up StateStartTimes with intentionally different order than ProcessedStates
+            # This simulates real execution where states start at different times
+            $scriptStateStartTimes = @{
+                "dockerStartup" = $baseTime.AddSeconds(0)   # First to start
+                "dockerReady" = $baseTime.AddSeconds(1)     # Second to start  
+                "apiReady" = $baseTime.AddSeconds(2)        # Third to start
+                "nodeReady" = $baseTime.AddSeconds(3)       # Last to start
+            }
+            Set-ScriptVariableMock -Name "StateStartTimes" -Value $scriptStateStartTimes
+              
+            # Set up start time
+            $startTime = $baseTime.AddSeconds(-5)
             Set-ScriptVariableMock -Name "TotalStartTime" -Value $startTime
             
             # Act
@@ -738,22 +760,20 @@ Describe "State Machine Visualization - Summary" {
             
             # Assert - Check for correct ordering in log (dockerStartup, dockerReady, apiReady, nodeReady)
             $logContent = Get-Content -Path $script:TestLogPath -Raw
-            
-            # Verify the order in the log output
-            if ($logContent -match "\[SUCCESS\] - ✅ Successfully processed: (.+)") {
-                $processedStates = $Matches[1]
-                
-                # Verify order of standard states
-                $dockerStartupIndex = $processedStates.IndexOf("dockerStartup")
-                $dockerReadyIndex = $processedStates.IndexOf("dockerReady")
-                $apiReadyIndex = $processedStates.IndexOf("apiReady")
-                $nodeReadyIndex = $processedStates.IndexOf("nodeReady")
-                
-                # Standard order is: dockerStartup, dockerReady, apiReady, nodeReady
-                $dockerStartupIndex | Should -BeLessThan $dockerReadyIndex
-                $dockerReadyIndex | Should -BeLessThan $apiReadyIndex
-                $apiReadyIndex | Should -BeLessThan $nodeReadyIndex
+              # Find all state entries in the log
+            $stateLines = @()
+            $logContent -split "`n" | ForEach-Object {
+                if ($_ -match '\[SYSTEM\].*[✓✗] (dockerStartup|dockerReady|apiReady|nodeReady)') {
+                    $stateLines += $Matches[1]
+                }
             }
+            
+            # Verify the states appear in execution order (start time order)
+            $stateLines.Count | Should -Be 4
+            $stateLines[0] | Should -Be "dockerStartup"
+            $stateLines[1] | Should -Be "dockerReady"
+            $stateLines[2] | Should -Be "apiReady"
+            $stateLines[3] | Should -Be "nodeReady"
         }
           It "Resets all state machine variables" {
             # Arrange - Set up variables that should be reset
@@ -967,4 +987,56 @@ Describe "State Machine Visualization - End-to-End Flow" {
         # Check summary
         $logContent | Should -Match "✓ nodeReady"
     }
+      It "Orders states by start time, not completion time" {
+            # Arrange - Simulate scenario where a later-started state completes first
+            $baseTime = Get-Date
+            $scriptProcessedStates = @{
+                "slowState" = @{
+                    "Status" = "Completed"
+                    "Success" = $true
+                    "Dependencies" = @()
+                    "Actions" = @()
+                    "Duration" = New-TimeSpan -Seconds 5.0
+                    "EndTime" = $baseTime.AddSeconds(6)  # Started first but finished last
+                }
+                "fastState" = @{
+                    "Status" = "Completed"
+                    "Success" = $true
+                    "Dependencies" = @()
+                    "Actions" = @()
+                    "Duration" = New-TimeSpan -Seconds 0.5
+                    "EndTime" = $baseTime.AddSeconds(2)  # Started second but finished first
+                }
+            }
+            Set-ScriptVariableMock -Name "ProcessedStates" -Value $scriptProcessedStates
+            
+            # Set up StateStartTimes - slowState started first, fastState started second
+            $scriptStateStartTimes = @{
+                "slowState" = $baseTime.AddSeconds(1)   # Started first
+                "fastState" = $baseTime.AddSeconds(1.5) # Started second
+            }
+            Set-ScriptVariableMock -Name "StateStartTimes" -Value $scriptStateStartTimes
+              
+            # Set up start time
+            $startTime = $baseTime.AddSeconds(-1)
+            Set-ScriptVariableMock -Name "TotalStartTime" -Value $startTime
+            
+            # Act
+            Write-StateSummary
+            
+            # Assert - slowState should appear before fastState in summary (based on start time)
+            $logContent = Get-Content -Path $script:TestLogPath -Raw
+              # Find all state entries in the log
+            $stateLines = @()
+            $logContent -split "`n" | ForEach-Object {
+                if ($_ -match '\[SYSTEM\].*[✓✗] (slowState|fastState)') {
+                    $stateLines += $Matches[1]
+                }
+            }
+            
+            # Verify the states appear in start time order, not completion time order
+            $stateLines.Count | Should -Be 2
+            $stateLines[0] | Should -Be "slowState"  # Started first, should appear first
+            $stateLines[1] | Should -Be "fastState"  # Started second, should appear second
+        }
 }

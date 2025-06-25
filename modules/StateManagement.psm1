@@ -260,6 +260,7 @@ function Get-StateSummary {
     
     return @{
         States = $script:ProcessedStates.Clone()
+        StateStartTimes = $script:StateStartTimes.Clone()
         TotalStartTime = $script:TotalStartTime
         TotalEndTime = $currentTime
         TotalDuration = $duration
