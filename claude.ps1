@@ -94,9 +94,9 @@ function Invoke-State {
             }
         }
     }
-    
-    # If pre-check succeeded, skip actions and mark as processed
+      # If pre-check succeeded, skip actions and mark as processed
     if ($skipActions) {
+        StateVisualization\Complete-State -StateName $StateName -Success $true
         $ProcessedStates.Add($StateName) | Out-Null
         return $true
     }
