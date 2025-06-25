@@ -208,7 +208,7 @@ Describe "State Machine Visualization - State Transitions" {
             $scriptStateTransitionStarted | Should -BeTrue
             $scriptTotalStartTime | Should -Not -BeNullOrEmpty            # Check log for STATE TRANSITIONS header (with actual format)
             $logContent = Get-Content -Path $script:TestLogPath -Raw
-            $logContent | Should -Match "🔧 │  STATE TRANSITIONS:"
+            $logContent | Should -Match "STATE TRANSITIONS:"
         }
     }
     
@@ -837,9 +837,9 @@ Describe "State Machine Visualization - End-to-End Flow" {
         # Check for correct sequence in log
         $logContent = Get-Content -Path $script:TestLogPath -Raw
         
-        # Check key elements individually to make the test more robust
-        $logContent | Should -Match "🔧 │  STATE TRANSITIONS:"
-        $logContent | Should -Match "🔧 │  ┌─ STATE: 🔄 ⚙️ TestState"
+        # Check key elements individually to make the test more robust        
+        $logContent | Should -Match "STATE TRANSITIONS:"
+        $logContent | Should -Match "┌─ STATE: 🔄 ⚙️ TestState"
         $logContent | Should -Match "Check: 🔍 Command check"
         $logContent | Should -Match "Result: ❌ NOT READY"
         $logContent | Should -Match "Actions:"
@@ -859,9 +859,8 @@ Describe "State Machine Visualization - End-to-End Flow" {
         
         # Assert
         $logContent = Get-Content -Path $script:TestLogPath -Raw
-        
-        # Check key elements individually
-        $logContent | Should -Match "🔧 │  ┌─ STATE: 🔄 ⚙️ TestState"
+          # Check key elements individually
+        $logContent | Should -Match "┌─ STATE: 🔄 ⚙️ TestState"
         $logContent | Should -Match "Check: 🔍 Command check"
         $logContent | Should -Match "Result: ✅ READY"
         $logContent | Should -Match "EXECUTION SUMMARY"
@@ -882,7 +881,8 @@ Describe "State Machine Visualization - End-to-End Flow" {
         
         # Assert
         $logContent = Get-Content -Path $script:TestLogPath -Raw
-        # Check key elements individually        $logContent | Should -Match "🔧 │  ┌─ STATE: 🔄 ⚙️ TestState"
+        # Check key elements individually        
+        $logContent | Should -Match "┌─ STATE: 🔄 ⚙️ TestState"
         $logContent | Should -Match "Actions:"
         $logContent | Should -Match "Status: ✗ FAILED.*Error: Action failed"
         $logContent | Should -Match "Result: ❌ FAILED"
@@ -917,18 +917,18 @@ Describe "State Machine Visualization - End-to-End Flow" {
         
         # Assert
         $logContent = Get-Content -Path $script:TestLogPath -Raw
-          # Check that all states are processed in the correct order
-        $logContent | Should -Match "🔧 │  ┌─ STATE: 🔄 ⚙️ dockerStartup"
+        # Check that all states are processed in the correct order        
+        $logContent | Should -Match "┌─ STATE: 🔄 ⚙️ dockerStartup"
         $logContent | Should -Match "Status: ✅ Ready"
         
-        $logContent | Should -Match "🔧 │  ┌─ STATE: 🔄 🐳 dockerReady"
+        $logContent | Should -Match "┌─ STATE: 🔄 🐳 dockerReady"
         $logContent | Should -Match "Dependencies: dockerStartup ✓"
         $logContent | Should -Match "Actions:"
         $logContent | Should -Match "⏳ Command \(docker start container\)"
         $logContent | Should -Match "Status: ✓ SUCCESS"
         $logContent | Should -Match "Result: ✅ COMPLETED"
         
-        $logContent | Should -Match "🔧 │  ┌─ STATE: 🔄 🚀 apiReady"
+        $logContent | Should -Match "┌─ STATE: 🔄 🚀 apiReady"
         $logContent | Should -Match "Dependencies: dockerReady ✓"
         $logContent | Should -Match "Result: ✅ READY"
           # Check summary shows all states in the correct order
@@ -944,9 +944,10 @@ Describe "State Machine Visualization - End-to-End Flow" {
         Write-StateCheck -CheckType "Endpoint" -CheckDetails "http://localhost:8000/health"
         Write-StateCheckResult -IsReady $true -CheckType "Endpoint" -AdditionalInfo "Status: 200"
         Write-StateSummary
-          # Assert
+        
+        # Assert
         $logContent = Get-Content -Path $script:TestLogPath -Raw
-        $logContent | Should -Match "🔧 │  ┌─ STATE: 🔄 🚀 apiReady"
+        $logContent | Should -Match "┌─ STATE: 🔄 🚀 apiReady"
         $logContent | Should -Match "Check: 🔍 Endpoint check"
         $logContent | Should -Match "Status: ✅ Ready"
     }

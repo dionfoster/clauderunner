@@ -55,15 +55,20 @@ function Write-Log {
             $color = "Gray"
         }
         "SYSTEM" {
-            $emoji = "🔧"
+            $emoji = ""  # No emoji prefix for system messages
             $color = "Cyan"
         }
     }
     
-    Write-Host "$emoji │  $Message" -ForegroundColor $color
+    if ($emoji -eq "") {
+        Write-Host "$Message" -ForegroundColor $color
+        $logMessage = "[$timestamp] [$Level] $Message"
+    } else {
+        Write-Host "$emoji │  $Message" -ForegroundColor $color
+        $logMessage = "[$timestamp] [$Level] $emoji │  $Message"
+    }
     
     # Log with timestamp to file
-    $logMessage = "[$timestamp] [$Level] $emoji │  $Message"
     $logMessage | Out-File -FilePath $script:LogPath -Append -Encoding UTF8
 }
 
