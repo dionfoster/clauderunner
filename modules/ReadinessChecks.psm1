@@ -1,6 +1,8 @@
 # ReadinessChecks.psm1 - Claude Task Runner readiness check functions
 
-# Import Logging module for direct access to logging functions
+# Import required modules
+Import-Module "$PSScriptRoot\StateVisualization.psm1"
+
 # No wrapper functions to avoid infinite recursion
 
 <#
@@ -99,7 +101,7 @@ function Test-EndpointReadiness {
     $attempt = 0
     $successCount = 0
     $startTime = Get-Date    $pollingDetails = "Polling endpoint: $Uri (max $MaxRetries tries, ${RetryInterval}s interval, need $SuccessfulRetries successes, timeout ${MaxTimeSeconds}s)"
-    $actionId = Logging\Start-StateAction -StateName $StateName -ActionType "Command" -ActionCommand "Endpoint polling" -Description $pollingDetails
+    $actionId = StateVisualization\Start-StateAction -StateName $StateName -ActionType "Command" -ActionCommand "Endpoint polling" -Description $pollingDetails
     
     # Remove the unused $finalSuccess variable
     
@@ -112,7 +114,7 @@ function Test-EndpointReadiness {
         if ($success) {
             $successCount++
               if ($successCount -ge $SuccessfulRetries) {
-                Logging\Complete-StateAction -StateName $StateName -ActionId $actionId -Success $true
+                StateVisualization\Complete-StateAction -StateName $StateName -ActionId $actionId -Success $true
                 return $true
             }
         } else {
@@ -120,12 +122,12 @@ function Test-EndpointReadiness {
         }
           # Check if we have exceeded time limit
         if ($elapsed -ge $MaxTimeSeconds) {
-            Logging\Complete-StateAction -StateName $StateName -ActionId $actionId -Success $false -ErrorMessage "Timed out after ${elapsed}s"
+            StateVisualization\Complete-StateAction -StateName $StateName -ActionId $actionId -Success $false -ErrorMessage "Timed out after ${elapsed}s"
             return $false
         }
           # Check if we have exceeded retry limit
         if ($attempt -ge $MaxRetries) {
-            Logging\Complete-StateAction -StateName $StateName -ActionId $actionId -Success $false -ErrorMessage "Max retries ($MaxRetries) exceeded"
+            StateVisualization\Complete-StateAction -StateName $StateName -ActionId $actionId -Success $false -ErrorMessage "Max retries ($MaxRetries) exceeded"
             return $false
         }
         
@@ -208,7 +210,7 @@ function Test-ContinueAfter {
         if ($StateConfig.readiness.maxTimeSeconds) { $MaxTimeSeconds = $StateConfig.readiness.maxTimeSeconds }
     }    # Create a "polling" action for the command check
     $pollingDetails = "Polling command: $Command (max $MaxRetries tries, ${RetryInterval}s interval, need $SuccessfulRetries successes, timeout ${MaxTimeSeconds}s)"
-    $actionId = Logging\Start-StateAction -StateName $StateName -ActionType "Command" -ActionCommand "Command polling" -Description $pollingDetails
+    $actionId = StateVisualization\Start-StateAction -StateName $StateName -ActionType "Command" -ActionCommand "Command polling" -Description $pollingDetails
     
     # Check if this is an endpoint check - use the helper function
     $endpointUri = Get-EndpointUri -StateConfig $StateConfig -ForWaiting
@@ -244,7 +246,7 @@ function Test-ContinueAfter {
             $successCount++
             
             if ($successCount -ge $SuccessfulRetries) {
-                Logging\Complete-StateAction -StateName $StateName -ActionId $actionId -Success $true
+                StateVisualization\Complete-StateAction -StateName $StateName -ActionId $actionId -Success $true
                 return $true
             }
         } else {
@@ -252,13 +254,13 @@ function Test-ContinueAfter {
         }
           # Check if we have exceeded time limit
         if ($elapsed -ge $MaxTimeSeconds) {
-            Logging\Complete-StateAction -StateName $StateName -ActionId $actionId -Success $false -ErrorMessage "Timed out after ${elapsed}s"
+            StateVisualization\Complete-StateAction -StateName $StateName -ActionId $actionId -Success $false -ErrorMessage "Timed out after ${elapsed}s"
             return $false
         }
         
         # Check if we have exceeded retry limit
         if ($attempt -ge $MaxRetries) {
-            Logging\Complete-StateAction -StateName $StateName -ActionId $actionId -Success $false -ErrorMessage "Max retries ($MaxRetries) exceeded"
+            StateVisualization\Complete-StateAction -StateName $StateName -ActionId $actionId -Success $false -ErrorMessage "Max retries ($MaxRetries) exceeded"
             return $false
         }
         
@@ -498,4 +500,6 @@ function Test-EndpointPath {
 
 # Export the functions
 Export-ModuleMember -Function Test-WebEndpoint, Test-EndpointReadiness, Test-ContinueAfter, Test-PreCheck, Get-EndpointUri, Test-CommandAvailable, Test-ServiceRunning, Test-EndpointPath
+
+
 

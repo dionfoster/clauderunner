@@ -1,6 +1,8 @@
 # CommandExecution.psm1 - Claude Task Runner command execution functions
 
-# Import Logging module for direct access to logging functions
+# Import required modules
+Import-Module "$PSScriptRoot\StateVisualization.psm1"
+
 # No wrapper functions to avoid infinite recursion
 
 <#
@@ -404,9 +406,8 @@ function Invoke-Command {
     # Transform command based on launch method
     $transformedCommand = ConvertTo-LaunchCommand -Command $resolvedCommand -LaunchVia $LaunchVia -WorkingDirectory $WorkingDirectory
     
-    try {
-        # Execute command
-        $icon = Get-StateIcon $StateName
+    try {        # Execute command
+        $icon = "⏳"  # Use direct icon instead of calling function
         $result = Invoke-CommandWithTimeout -Command $transformedCommand.Command `
                                            -CommandType $transformedCommand.CommandType `
                                            -TimeoutSeconds $TimeoutSeconds `
