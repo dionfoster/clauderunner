@@ -97,10 +97,11 @@ function Test-EndpointReadiness {
         [Parameter(Mandatory=$false)]
         [switch]$Quiet
     )
-    
-    $attempt = 0
+      $attempt = 0
     $successCount = 0
-    $startTime = Get-Date    $pollingDetails = "Polling endpoint: $Uri (max $MaxRetries tries, ${RetryInterval}s interval, need $SuccessfulRetries successes, timeout ${MaxTimeSeconds}s)"
+    $startTime = Get-Date
+    
+    $pollingDetails = "Polling endpoint: $Uri (max $MaxRetries tries, ${RetryInterval}s interval, need $SuccessfulRetries successes, timeout ${MaxTimeSeconds}s)"
     $actionId = StateVisualization\Start-StateAction -StateName $StateName -ActionType "Command" -ActionCommand "Endpoint polling" -Description $pollingDetails
     
     # Remove the unused $finalSuccess variable

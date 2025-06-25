@@ -7,6 +7,7 @@ applyTo: '**'
 - **Simplicity**: Favor readable, straightforward code over complex abstractions
 - **Maintainability**: Well-documented, consistent code patterns
 - **Robustness**: Thorough error handling and graceful failure modes
+- **Powershell Syntax**: DO NOT CONTINUE IF SYNTAX IS INCORRECT
 
 ## Refactoring Guidelines
 - Refactor for clarity, not just to reduce lines of code
