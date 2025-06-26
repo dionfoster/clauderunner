@@ -7,7 +7,13 @@ param(
     [string]$TestPath = "",
     
     [Parameter()]
-    [switch]$Coverage
+    [switch]$Coverage,
+    
+    [Parameter()]
+    [switch]$UseConfig,
+    
+    [Parameter()]
+    [double]$CoverageThreshold = 0.0
 )
 
 # Ensure Pester is installed
@@ -29,36 +35,59 @@ if (-not (Test-Path $TestsRoot)) {
 }
 
 # Set up the configuration for Pester
-$config = New-PesterConfiguration
-$config.Run.PassThru = $true  # Enable PassThru to capture results
-$config.Output.Verbosity = 'Detailed'
-
-# Set the test path based on parameters
-if ($TestPath) {
-    # Use the specific file path
-    $config.Run.Path = $TestPath
-    Write-Host "Running tests from specific path: $TestPath" -ForegroundColor Cyan
+if ($UseConfig) {
+    # Use the dedicated Pester configuration file
+    Write-Host "Using PesterConfig.ps1 for comprehensive test configuration" -ForegroundColor Cyan
+    $config = & "$PSScriptRoot\PesterConfig.ps1"
+    
+    # Override specific settings if parameters are provided
+    if ($TestPath) {
+        $config.Run.Path = $TestPath
+        Write-Host "Overriding test path to: $TestPath" -ForegroundColor Yellow
+    }
+    
+    if ($TestName) {
+        $config.Filter.FullName = $TestName
+        Write-Host "Filtering to specific test: $TestName" -ForegroundColor Yellow
+    }
+    
+    # Disable coverage if explicitly not requested
+    if (-not $Coverage) {
+        $config.CodeCoverage.Enabled = $false
+    }
 } else {
-    # Use the default tests directory
-    $config.Run.Path = $TestsRoot
-    Write-Host "Running Pester tests from $TestsRoot" -ForegroundColor Cyan
-}
+    # Use the original inline configuration
+    $config = New-PesterConfiguration
+    $config.Run.PassThru = $true  # Enable PassThru to capture results
+    $config.Output.Verbosity = 'Detailed'
 
-# If a specific test name is provided, only run that test
-if ($TestName) {
-    $config.Filter.FullName = $TestName
-}
+    # Set the test path based on parameters
+    if ($TestPath) {
+        # Use the specific file path
+        $config.Run.Path = $TestPath
+        Write-Host "Running tests from specific path: $TestPath" -ForegroundColor Cyan
+    } else {
+        # Use the default tests directory
+        $config.Run.Path = $TestsRoot
+        Write-Host "Running Pester tests from $TestsRoot" -ForegroundColor Cyan
+    }
 
-# Configure code coverage if requested
-if ($Coverage) {
-    $config.CodeCoverage.Enabled = $true
-    $config.CodeCoverage.Path = "$PSScriptRoot\modules\*.psm1"
-    $config.CodeCoverage.OutputPath = "$PSScriptRoot\coverage.xml"
-    $config.CodeCoverage.OutputFormat = 'JaCoCo'
+    # If a specific test name is provided, only run that test
+    if ($TestName) {
+        $config.Filter.FullName = $TestName
+    }
+    
+    # Configure code coverage if requested
+    if ($Coverage) {
+        $config.CodeCoverage.Enabled = $true
+        $config.CodeCoverage.Path = "$PSScriptRoot\modules\*.psm1"
+        $config.CodeCoverage.OutputPath = "$PSScriptRoot\TestResults\coverage.xml"
+        $config.CodeCoverage.OutputFormat = 'JaCoCo'
+    }
 }
 
 # Run the tests and store the results
-Write-Host "Running Pester tests from $TestsRoot" -ForegroundColor Cyan
+Write-Host "Running Pester tests..." -ForegroundColor Cyan
 $results = Invoke-Pester -Configuration $config
 
 # Display a summary of the test results
@@ -79,6 +108,34 @@ if ($null -eq $results) {
     Write-Host "Tests Failed: $($results.FailedCount)" -ForegroundColor $failedColor
     Write-Host "Tests Skipped: $($results.SkippedCount)" -ForegroundColor $skippedColor
     Write-Host "Duration: $durationFormatted seconds" -ForegroundColor Cyan
+    
+    # Display code coverage information if enabled
+    if ($results.CodeCoverage) {
+        $coveragePercent = [math]::Round(($results.CodeCoverage.CoveragePercent), 2)
+        $coverageColor = switch ($coveragePercent) {
+            { $_ -ge 90 } { "Green" }
+            { $_ -ge 70 } { "Yellow" }
+            default { "Red" }
+        }
+        
+        Write-Host "`n----- Code Coverage -----" -ForegroundColor Cyan
+        Write-Host "Coverage: $coveragePercent%" -ForegroundColor $coverageColor
+        Write-Host "Lines Covered: $($results.CodeCoverage.CoveredCommands)" -ForegroundColor Cyan
+        Write-Host "Lines Missed: $($results.CodeCoverage.MissedCommands)" -ForegroundColor Cyan
+        
+        if ($config.CodeCoverage.OutputPath) {
+            Write-Host "Coverage report saved to: $($config.CodeCoverage.OutputPath)" -ForegroundColor Cyan
+        }
+        
+        # Check coverage threshold if specified
+        if ($CoverageThreshold -gt 0 -and $coveragePercent -lt $CoverageThreshold) {
+            Write-Host "WARNING: Coverage $coveragePercent% is below threshold of $CoverageThreshold%" -ForegroundColor Red
+            if ($results.FailedCount -eq 0) {
+                # Set failed count to 1 if coverage is below threshold
+                $global:LASTEXITCODE = 1
+            }
+        }
+    }
 }
 
 # Return the results object for potential further processing

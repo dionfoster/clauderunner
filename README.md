@@ -410,6 +410,70 @@ The task runner provides carefully formatted output with:
    └─ Result: ✅ COMPLETED (7.0s)
    ```
 
+## Testing and Code Coverage
+
+The Claude Task Runner includes comprehensive testing with code coverage analysis using the Pester framework.
+
+### Running Tests
+
+#### Basic Test Execution
+```powershell
+# Run all tests
+.\RunTests.ps1
+
+# Run a specific test file
+.\RunTests.ps1 -TestPath "tests\Configuration.Tests.ps1"
+
+# Run a specific test by name
+.\RunTests.ps1 -TestName "*Test-LoadConfiguration*"
+```
+
+#### Code Coverage Analysis
+```powershell
+# Run tests with comprehensive code coverage
+.\RunTestsWithCoverage.ps1
+
+# Run with custom coverage threshold (default is 80%)
+.\RunTestsWithCoverage.ps1 -CoverageThreshold 85
+
+# Use the advanced Pester configuration
+.\RunTests.ps1 -UseConfig -Coverage
+```
+
+#### Coverage Reports
+```powershell
+# Generate HTML coverage report
+.\GenerateCoverageReport.ps1
+
+# View coverage data in different formats
+# XML report: TestResults\coverage.xml (JaCoCo format)
+# Test results: TestResults\testresults.xml (NUnit format)
+# HTML report: TestResults\coverage-report.html
+```
+
+### Coverage Configuration
+
+The project includes a dedicated Pester configuration (`PesterConfig.ps1`) that provides:
+
+- **Comprehensive Coverage**: Analyzes all PowerShell modules in the `modules/` directory
+- **Standard Reporting**: Generates JaCoCo XML and NUnit XML reports for CI/CD integration
+- **Threshold Enforcement**: Configurable coverage thresholds with failure on low coverage
+- **Exclusions**: Properly excludes test files and helpers from coverage analysis
+
+### CI/CD Integration
+
+The generated reports are in standard formats compatible with most CI/CD systems:
+
+- **JaCoCo XML**: Industry standard for code coverage reporting
+- **NUnit XML**: Standard test results format
+- **Exit Codes**: Proper exit codes for build pipeline integration
+
+Example for GitHub Actions, Azure DevOps, or other CI systems:
+```powershell
+.\RunTestsWithCoverage.ps1 -CoverageThreshold 80
+# Exit code 0 = success, 1 = failure (tests failed or coverage below threshold)
+```
+
 ## Customizing the Runner
 
 You can extend the task runner by:

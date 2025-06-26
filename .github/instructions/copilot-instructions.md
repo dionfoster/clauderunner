@@ -70,6 +70,7 @@ applyTo: '**'
 - Ensure that new ideas align with the overall project philosophy and standards
 
 ## Testing
+- Use Pester for all tests
 - When fixing broken tests, focus on fixing the functional issue, not adjusting the tests unless they are incorrect
 - Ensure that tests are written to cover the functionality, not just to pass
 - Before adding new tests, ensure that the existing tests are passing and the syntax is correct, DO NOT CONTINUE IF SYNTAX IS INCORRECT

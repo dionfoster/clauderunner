@@ -1,1 +1,8 @@
 /claude.log
+
+# Test Results and Coverage Reports
+TestResults/
+coverage.xml
+testresults.xml
+coverage-report.html
+*.coverage
