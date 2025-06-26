@@ -1,19 +1,13 @@
 # TestEnvironment.ps1 - Common setup for all test files
 
+# Import TestHelpers module to avoid duplication
+Import-Module "$PSScriptRoot\TestHelpers.psm1" -Force -Global
+
 # Set script-scope variables for use in tests
 $script:ModuleRoot = (Resolve-Path -Path "$PSScriptRoot\..\..\modules").Path
 
-# Create a TestDrive item if it doesn't exist (for Pester 5)
-if (-not (Test-Path "TestDrive:\")) {
-    New-Item -Path "TestDrive:\" -ItemType Directory -Force | Out-Null
-}
-
-# Ensure TestLogPath is initialized with a valid default value
-$script:TestLogPath = "$env:TEMP\claude_test.log"
-# Try to use TestDrive if available
-if (Test-Path "TestDrive:\") {
-    $script:TestLogPath = "TestDrive:\claude_test.log"
-}
+# Initialize test log path using TestHelpers logic
+$script:TestLogPath = if (Test-Path "TestDrive:\") { "TestDrive:\claude_test.log" } else { "$env:TEMP\claude_test.log" }
 
 # Global state machine variables
 $global:StatusIcons = @{
@@ -47,52 +41,27 @@ $global:CommonTestPatterns = @{
 }
 
 function global:Initialize-TestEnvironment {
-    # Initialize test state
+    # Initialize test state using TestHelpers
     Reset-StateMachineVariables
     
-    # Create test log file
-    Reset-LogFile
+    # Create test log file using TestHelpers
+    Reset-TestLogFile -TestLogPath $script:TestLogPath
 }
 
 function global:Reset-LogFile {
-    # Ensure we have a valid log path
-    if ([string]::IsNullOrEmpty($script:TestLogPath)) {
-        $script:TestLogPath = "$env:TEMP\claude_test.log"
-    }
-    
-    # Remove the log file if it exists
-    if (Test-Path $script:TestLogPath) {
-        Remove-Item $script:TestLogPath -Force
-    }
-    
-    # Create a new log file
-    $logDir = Split-Path -Parent $script:TestLogPath
-    if (-not (Test-Path $logDir)) {
-        New-Item -Path $logDir -ItemType Directory -Force | Out-Null
-    }
-    New-Item -Path $script:TestLogPath -ItemType File -Force | Out-Null
-    
-    # Set the global log path for the module if the function exists
-    if (Get-Command -Name Set-LogPath -ErrorAction SilentlyContinue) {
-        Set-LogPath -Path $script:TestLogPath
-    }
+    # Delegate to TestHelpers function to avoid duplication
+    Reset-TestLogFile -TestLogPath $script:TestLogPath
 }
 
 function global:Remove-TestEnvironment {
-    # Clean up test log files
+    # Clean up test log files using TestHelpers
     if (Test-Path $script:TestLogPath) {
         Remove-Item $script:TestLogPath -Force
     }
 }
 
-function global:Reset-StateMachineVariables {
-    # Initialize global variables to mirror module script variables
-    $global:StateTransitionStarted = $false
-    $global:TotalStartTime = $null
-    $global:StateStartTimes = @{}
-    $global:ActionStartTimes = @{}
-    $global:ProcessedStates = @{}
-}
+# Use the Reset-StateMachineVariables function from TestHelpers module
+# No need to redefine it here since it's imported
 
 function global:Update-ModuleScriptVariables {
     param (
@@ -121,12 +90,8 @@ function global:Get-ModuleScriptVar {
         [string]$ModuleName = "Logging"
     )
     
-    # Access script variables from the module's scope
-    $module = Get-Module $ModuleName
-    if ($module) {
-        return & $module ([scriptblock]::Create("return `$script:$Name"))
-    }
-    return $null
+    # Use the helper function from TestHelpers module
+    return Get-StateManagementVar -VarName $Name
 }
 
 function global:Test-LogContains {
@@ -135,33 +100,17 @@ function global:Test-LogContains {
         [string]$Pattern
     )
     
-    $logContent = Get-Content -Path $script:TestLogPath -Raw
-    return $logContent -match $Pattern
-}
-
-function global:Set-ScriptVariableMock {
-    param (
-        [Parameter(Mandatory=$true)]
-        [string]$Name,
-        
-        [Parameter(Mandatory=$true)]
-        $Value,
-        
-        [Parameter(Mandatory=$false)]
-        [string]$ModuleName = "Logging"
-    )
-    
-    # Set script variable value in the module's scope
-    $module = Get-Module $ModuleName
-    if ($module) {
-        & $module ([scriptblock]::Create("`$script:$Name = `$args[0]")) $Value
-        
-        # Also update the global copy
-        if (Test-Path "variable:global:$Name") {
-            Set-Variable -Name $Name -Value $Value -Scope Global
-        }
+    # Use the TestHelpers Assert-LogContent function
+    try {
+        Assert-LogContent -TestLogPath $script:TestLogPath -Pattern $Pattern
+        return $true
+    }
+    catch {
+        return $false
     }
 }
+
+# Remove the duplicated Set-ScriptVariableMock function since it's available in TestHelpers module
 
 # Mock for Write-Log function used in modules
 function global:Write-Log {
@@ -214,7 +163,6 @@ function global:ConvertFrom-Yaml {
     
     $currentSection = $result
     $currentPath = @()
-    $currentIndent = 0
     
     foreach ($line in $lines) {
         if ([string]::IsNullOrWhiteSpace($line) -or $line.Trim().StartsWith('#')) {
@@ -234,7 +182,6 @@ function global:ConvertFrom-Yaml {
                 $currentSection[$key] = @{
                 }
                 $currentPath += $key
-                $currentIndent = $indent
             }
             else {
                 # Remove quotes if present

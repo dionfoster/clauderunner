@@ -93,7 +93,13 @@ Describe "State Machine Visualization - Edge Cases" {    BeforeEach {
             # Assert - check that summary was written
             $logContent = Get-Content -Path $script:TestLogPath -Raw
             $logContent | Should -Match "EXECUTION SUMMARY"
-            $scriptProcessedStates = Get-ModuleScriptVar -Name "ProcessedStates"
+            
+            # Retrieve all the script variables to check reset state
+            $scriptProcessedStates = Get-StateManagementVar -VarName "ProcessedStates"
+            $scriptStateTransitionStarted = Get-StateManagementVar -VarName "StateTransitionStarted"
+            $scriptTotalStartTime = Get-StateManagementVar -VarName "TotalStartTime"
+            $scriptStateStartTimes = Get-StateManagementVar -VarName "StateStartTimes"
+            $scriptActionStartTimes = Get-StateManagementVar -VarName "ActionStartTimes"
             
             $scriptStateTransitionStarted | Should -BeFalse
             $scriptTotalStartTime | Should -BeNullOrEmpty

@@ -295,6 +295,10 @@ function Add-StateManagementHelpers {
             if (Get-Variable -Name "CurrentState" -Scope Global -ErrorAction SilentlyContinue) {
                 $global:CurrentState = $null
             }
+            # Additional variables used in TestEnvironment
+            $global:StateTransitionStarted = $false
+            $global:StateStartTimes = @{}
+            $global:ActionStartTimes = @{}
         }
     }
 }
