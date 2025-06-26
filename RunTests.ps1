@@ -123,6 +123,52 @@ if ($null -eq $results) {
         Write-Host "Lines Covered: $($results.CodeCoverage.CommandsExecutedCount)" -ForegroundColor Green
         Write-Host "Lines Missed: $($results.CodeCoverage.CommandsMissedCount)" -ForegroundColor Red
         
+        # Display per-file coverage table
+        if ($results.CodeCoverage.CommandsExecuted -or $results.CodeCoverage.CommandsMissed) {
+            Write-Host "`n----- Coverage by File -----" -ForegroundColor Cyan
+            
+            # Group commands by file and calculate statistics
+            $fileStats = @{
+            }
+            
+            # Process executed commands
+            foreach ($command in $results.CodeCoverage.CommandsExecuted) {
+                $fileName = Split-Path $command.File -Leaf
+                if (-not $fileStats.ContainsKey($fileName)) {
+                    $fileStats[$fileName] = @{ Covered = 0; Missed = 0 }
+                }
+                $fileStats[$fileName].Covered++
+            }
+            
+            # Process missed commands
+            foreach ($command in $results.CodeCoverage.CommandsMissed) {
+                $fileName = Split-Path $command.File -Leaf
+                if (-not $fileStats.ContainsKey($fileName)) {
+                    $fileStats[$fileName] = @{ Covered = 0; Missed = 0 }
+                }
+                $fileStats[$fileName].Missed++
+            }
+            
+            # Create table data
+            $tableData = @()
+            foreach ($file in $fileStats.Keys) {
+                $covered = $fileStats[$file].Covered
+                $missed = $fileStats[$file].Missed
+                $total = $covered + $missed
+                $percentage = if ($total -gt 0) { [math]::Round(($covered / $total) * 100, 1) } else { 0 }
+                
+                $tableData += [PSCustomObject]@{
+                    'File' = $file
+                    'Lines Covered' = $covered
+                    'Lines Missed' = $missed
+                    'Coverage %' = $percentage
+                }
+            }
+            
+            # Display the table sorted by coverage percentage (descending)
+            $tableData | Sort-Object 'Coverage %' -Descending | Format-Table -AutoSize
+        }
+        
         if ($config.CodeCoverage.OutputPath) {
             $reportPath = $config.CodeCoverage.OutputPath
             if ($reportPath -like "*coverage.xml*" -and (Test-Path "$PSScriptRoot\TestResults\coverage.xml")) {
