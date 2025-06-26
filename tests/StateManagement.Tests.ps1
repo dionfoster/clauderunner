@@ -1,24 +1,17 @@
 # Pester tests for StateManagement module
 BeforeAll {
-    # Import the TestEnvironment helper
-    . "$PSScriptRoot\TestHelpers\TestEnvironment.ps1"
+    # Import test helpers
+    Import-Module "$PSScriptRoot\TestHelpers\TestHelpers.psm1" -Force
     
-    # Set up test environment
-    Initialize-TestEnvironment
-    
-    # Import the module to test
-    Import-Module "$PSScriptRoot\..\modules\StateManagement.psm1" -Force
-}
-
-AfterAll {
-    # Clean up test environment
-    Remove-TestEnvironment
+    # Set up standardized test environment
+    $script:TestLogPath = Join-Path $TestDrive "test.log"
+    $env = Initialize-StandardTestEnvironment -ModulesToImport @("StateManagement") -TestLogPath $script:TestLogPath
 }
 
 Describe "State Management Module" {
     BeforeEach {
-        # Re-import module to ensure fresh state
-        Import-Module "$PSScriptRoot\..\modules\StateManagement.psm1" -Force
+        # Use standardized BeforeEach setup
+        Reset-TestLogFile -TestLogPath $script:TestLogPath
     }
 
     Context "Get-StateIcon" {

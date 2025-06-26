@@ -160,7 +160,7 @@ Describe "State Machine Visualization - State Transitions" {
                 $logContent = Get-Content -Path $script:TestLogPath -Raw
                 $logContent | Should -Match "┌─ STATE: 🔄 $($testCase.ExpectedIcon) $($testCase.StateName)"
                   # Reset for next test
-                Reset-LogFile
+                Reset-TestLogFile -TestLogPath $script:TestLogPath
                 Reset-StateMachineVariables
             }
         }

@@ -1,13 +1,11 @@
 # Pester tests for ReadinessChecks module
 BeforeAll {
-    # Import the TestEnvironment helper
-    . "$PSScriptRoot\TestHelpers\TestEnvironment.ps1"
+    # Import test helpers
+    Import-Module "$PSScriptRoot\TestHelpers\TestHelpers.psm1" -Force
     
-    # Set up test environment
-    Initialize-TestEnvironment
-    
-    # Import the module to test
-    Import-Module "$PSScriptRoot\..\modules\ReadinessChecks.psm1" -Force
+    # Set up standardized test environment
+    $script:TestLogPath = Join-Path $TestDrive "test.log"
+    $env = Initialize-StandardTestEnvironment -ModulesToImport @("ReadinessChecks") -TestLogPath $script:TestLogPath
     
     # Create mock for Invoke-WebRequest
     Mock -ModuleName ReadinessChecks Invoke-WebRequest {
@@ -32,12 +30,13 @@ BeforeAll {
     }
 }
 
-AfterAll {
-    # Clean up test environment
-    Remove-TestEnvironment
-}
-
-Describe "ReadinessChecks Module" {    Context "Test-CommandAvailable for Docker" {
+Describe "ReadinessChecks Module" {
+    BeforeEach {
+        # Use standardized BeforeEach setup
+        Reset-TestLogFile -TestLogPath $script:TestLogPath
+    }
+    
+    Context "Test-CommandAvailable for Docker" {
         It "Returns true when Docker is installed (mocked)" {
             # Arrange
             Mock -ModuleName ReadinessChecks Get-Command { return $true } -ParameterFilter { $Name -eq "docker" }

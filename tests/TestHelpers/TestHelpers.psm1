@@ -280,15 +280,21 @@ function Add-StateManagementHelpers {
     }
       # Helper function to reset state machine variables
     function global:Reset-StateMachineVariables {
-        # Reset state machine variables if they exist
-        if (Get-Variable -Name "ProcessedStates" -Scope Global -ErrorAction SilentlyContinue) {
-            $global:ProcessedStates = @{}
-        }
-        if (Get-Variable -Name "TotalStartTime" -Scope Global -ErrorAction SilentlyContinue) {
-            $global:TotalStartTime = $null
-        }
-        if (Get-Variable -Name "CurrentState" -Scope Global -ErrorAction SilentlyContinue) {
-            $global:CurrentState = $null
+        # Try to call the actual module function first
+        $module = Get-Module StateManagement
+        if ($module) {
+            & $module ([scriptblock]::Create("Reset-StateMachineVariables"))
+        } else {
+            # Fallback: Reset global variables if they exist
+            if (Get-Variable -Name "ProcessedStates" -Scope Global -ErrorAction SilentlyContinue) {
+                $global:ProcessedStates = @{}
+            }
+            if (Get-Variable -Name "TotalStartTime" -Scope Global -ErrorAction SilentlyContinue) {
+                $global:TotalStartTime = $null
+            }
+            if (Get-Variable -Name "CurrentState" -Scope Global -ErrorAction SilentlyContinue) {
+                $global:CurrentState = $null
+            }
         }
     }
 }
@@ -354,5 +360,43 @@ function Get-StandardBeforeAll {
     }.GetNewClosure()
 }
 
+<#
+.SYNOPSIS
+Sets a mock value for a script-level variable in a module.
+
+.DESCRIPTION
+This function allows tests to mock script-level variables in PowerShell modules
+for testing purposes. It directly manipulates the module's script scope.
+
+.PARAMETER Name
+The name of the script variable to mock (without the $script: prefix).
+
+.PARAMETER Value
+The mock value to set for the variable.
+
+.PARAMETER ModuleName
+The name of the module where the variable exists. Defaults to 'StateManagement'.
+#>
+function Set-ScriptVariableMock {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Name,
+        
+        [Parameter(Mandatory=$false)]
+        [object]$Value,
+        
+        [Parameter(Mandatory=$false)]
+        [string]$ModuleName = "StateManagement"
+    )
+    
+    $module = Get-Module $ModuleName
+    if ($module) {
+        # Set the script variable in the module's scope
+        & $module ([scriptblock]::Create("`$script:$Name = `$args[0]")) $Value
+    } else {
+        Write-Warning "Module $ModuleName not found. Cannot set script variable $Name."
+    }
+}
+
 # Export the functions
-Export-ModuleMember -Function Initialize-StandardTestEnvironment, Reset-TestLogFile, Assert-LogContent, New-StateManagementVariableMock, Get-StandardBeforeEach, Add-StateManagementHelpers, Add-CommonTestMocks, Get-StandardBeforeAll
+Export-ModuleMember -Function Initialize-StandardTestEnvironment, Reset-TestLogFile, Assert-LogContent, New-StateManagementVariableMock, Get-StandardBeforeEach, Add-StateManagementHelpers, Add-CommonTestMocks, Get-StandardBeforeAll, Set-ScriptVariableMock
