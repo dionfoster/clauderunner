@@ -1,16 +1,11 @@
 # Pester tests for State Visualization module
 BeforeAll {
-    # Set up test log path
+    # Import test helpers
+    Import-Module "$PSScriptRoot\TestHelpers\TestHelpers.psm1" -Force
+    
+    # Set up standardized test environment
     $script:TestLogPath = Join-Path $TestDrive "test.log"
-    
-    # Import modules directly in dependency order
-    Import-Module "$PSScriptRoot\..\modules\Logging.psm1" -Force
-    Import-Module "$PSScriptRoot\..\modules\StateManagement.psm1" -Force
-    Import-Module "$PSScriptRoot\..\modules\StateVisualization.psm1" -Force
-    
-    # Initialize log file
-    New-Item -Path $script:TestLogPath -ItemType File -Force | Out-Null
-    Logging\Set-LogPath -Path $script:TestLogPath
+    $env = Initialize-StandardTestEnvironment -ModulesToImport @("Logging", "StateManagement", "StateVisualization") -TestLogPath $script:TestLogPath -IncludeStateManagement -IncludeCommonMocks
 }
 
 AfterAll {
@@ -21,15 +16,10 @@ AfterAll {
 }
 
 Describe "State Visualization Module" {
-      Context "State Transitions" {
+    Context "State Transitions" {
         BeforeEach {
-            # Reset log file for each test
-            if (Test-Path $script:TestLogPath) {
-                Remove-Item $script:TestLogPath -Force
-            }
-            New-Item -Path $script:TestLogPath -ItemType File -Force | Out-Null
-            
-            # Reset state machine variables if available
+            # Use standardized BeforeEach setup
+            Reset-TestLogFile -TestLogPath $script:TestLogPath
             if (Get-Command -Name Reset-StateMachineVariables -ErrorAction SilentlyContinue) {
                 Reset-StateMachineVariables
             }
@@ -90,47 +80,35 @@ Describe "State Visualization Module" {
         }
         
         It "Records a successful state check result" {
+            # Arrange - Setup a state first
+            Start-StateProcessing -StateName "TestState"
+            
             # Act
             Write-StateCheckResult -IsReady $true -CheckType "Command" -AdditionalInfo "Docker 20.10.7"
             
             # Assert
-            if (Test-Path $script:TestLogPath) {
-                $logContent = Get-Content -Path $script:TestLogPath -Raw
-                $logContent | Should -Match "Status: ✅ Ready - Command \(Docker 20.10.7\)"
-            } else {
-                "Log file doesn't exist" | Should -BeNullOrEmpty
-            }
+            Assert-LogContent -TestLogPath $script:TestLogPath -Pattern "Status: ✅ Ready - Command \(Docker 20.10.7\)"
         }
         
         It "Records a failed state check result" {
+            # Arrange - Setup a state first
+            Start-StateProcessing -StateName "TestState"
+            
             # Act
             Write-StateCheckResult -IsReady $false -CheckType "Command" -AdditionalInfo "Command not found"
             
             # Assert
-            if (Test-Path $script:TestLogPath) {
-                $logContent = Get-Content -Path $script:TestLogPath -Raw
-                $logContent | Should -Match "Status: ❌ Not Ready - Command \(Command not found\)"
-            } else {
-                "Log file doesn't exist" | Should -BeNullOrEmpty
-            }
+            Assert-LogContent -TestLogPath $script:TestLogPath -Pattern "Status: ❌ Not Ready - Command \(Command not found\)"
         }
     }
     
     Context "State Actions" {
         BeforeEach {
-            # Create a fresh log file for each test
-            Reset-LogFile
-            
-            # Re-import modules to ensure fresh state
-            Import-Module "$PSScriptRoot\..\modules\Logging.psm1" -Force
-            Import-Module "$PSScriptRoot\..\modules\StateManagement.psm1" -Force
-            Import-Module "$PSScriptRoot\..\modules\StateVisualization.psm1" -Force
-            
-            # Set the log path for tests
-            Set-LogPath -Path $script:TestLogPath
-            
-            # Reset state machine variables to ensure clean test state
-            Reset-StateMachineVariables
+            # Use standardized BeforeEach setup
+            Reset-TestLogFile -TestLogPath $script:TestLogPath
+            if (Get-Command -Name Reset-StateMachineVariables -ErrorAction SilentlyContinue) {
+                Reset-StateMachineVariables
+            }
             
             # Setup test state
             Start-StateProcessing -StateName "TestState"
@@ -183,32 +161,17 @@ Describe "State Visualization Module" {
             Complete-StateAction -StateName "TestState" -ActionId $actionId -Success $false -ErrorMessage "Package not found"
             
             # Assert
-            if (Test-Path $script:TestLogPath) {
-                $logContent = Get-Content -Path $script:TestLogPath -Raw
-                $logContent | Should -Match "Status: ✗ FAILED.*Error: Package not found"
-            } else {
-                "Log file doesn't exist" | Should -BeNullOrEmpty
-            }
+            Assert-LogContent -TestLogPath $script:TestLogPath -Pattern "Status: ✗ FAILED.*Error: Package not found"
         }
-    
     }
     
     Context "State Completion" {
-        
         BeforeEach {
-            # Create a fresh log file for each test
-            Reset-LogFile
-            
-            # Re-import modules to ensure fresh state
-            Import-Module "$PSScriptRoot\..\modules\Logging.psm1" -Force
-            Import-Module "$PSScriptRoot\..\modules\StateManagement.psm1" -Force
-            Import-Module "$PSScriptRoot\..\modules\StateVisualization.psm1" -Force
-            
-            # Set the log path for tests
-            Set-LogPath -Path $script:TestLogPath
-            
-            # Reset state machine variables to ensure clean test state
-            Reset-StateMachineVariables
+            # Use standardized BeforeEach setup
+            Reset-TestLogFile -TestLogPath $script:TestLogPath
+            if (Get-Command -Name Reset-StateMachineVariables -ErrorAction SilentlyContinue) {
+                Reset-StateMachineVariables
+            }
             
             # Setup test states
             Start-StateProcessing -StateName "TestState"
@@ -220,12 +183,7 @@ Describe "State Visualization Module" {
             Complete-State -StateName "TestState" -Success $true
             
             # Assert
-            if (Test-Path $script:TestLogPath) {
-                $logContent = Get-Content -Path $script:TestLogPath -Raw
-                $logContent | Should -Match "Result: ✅ COMPLETED"
-            } else {
-                "Log file doesn't exist" | Should -BeNullOrEmpty
-            }
+            Assert-LogContent -TestLogPath $script:TestLogPath -Pattern $global:CommonTestPatterns.ResultCompleted
         }
         
         It "Records failed state completion" {
@@ -233,15 +191,11 @@ Describe "State Visualization Module" {
             Complete-State -StateName "TestState" -Success $false -ErrorMessage "Test error"
             
             # Assert
-            if (Test-Path $script:TestLogPath) {
-                $logContent = Get-Content -Path $script:TestLogPath -Raw
-                $logContent | Should -Match "Result: ❌ FAILED"
-                $logContent | Should -Match "Error: Test error"
-            } else {
-                "Log file doesn't exist" | Should -BeNullOrEmpty
-            }
+            Assert-LogContent -TestLogPath $script:TestLogPath -Pattern $global:CommonTestPatterns.ResultFailed
+            Assert-LogContent -TestLogPath $script:TestLogPath -Pattern "Error: Test error"
         }
-          It "Shows state summary with mixed results" {
+        
+        It "Shows state summary with mixed results" {
             # Act
             # Initialize state transitions first
             Start-StateTransitions
@@ -266,13 +220,8 @@ Describe "State Visualization Module" {
             Write-StateSummary
             
             # Assert
-            if (Test-Path $script:TestLogPath) {
-                $logContent = Get-Content -Path $script:TestLogPath -Raw
-                $logContent | Should -Match "EXECUTION SUMMARY"
-                $logContent | Should -Match "Total time:"
-            } else {
-                "Log file doesn't exist" | Should -BeNullOrEmpty
-            }
+            Assert-LogContent -TestLogPath $script:TestLogPath -Pattern $global:CommonTestPatterns.ExecutionSummary
+            Assert-LogContent -TestLogPath $script:TestLogPath -Pattern "Total time:"
         }
     }
 }

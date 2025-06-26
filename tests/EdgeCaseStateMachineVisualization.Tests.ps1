@@ -1,38 +1,17 @@
 # Additional edge case tests for state machine visualization
 
 BeforeAll {
-    # Set up test log path
+    # Import test helpers
+    Import-Module "$PSScriptRoot\TestHelpers\TestHelpers.psm1" -Force
+    
+    # Set up standardized test environment
     $script:TestLogPath = Join-Path $TestDrive "test.log"
-    
-    # Import modules directly in dependency order
-    Import-Module "$PSScriptRoot\..\modules\Logging.psm1" -Force
-    Import-Module "$PSScriptRoot\..\modules\StateManagement.psm1" -Force
-    Import-Module "$PSScriptRoot\..\modules\StateVisualization.psm1" -Force
-    
-    # Initialize log file
-    New-Item -Path $script:TestLogPath -ItemType File -Force | Out-Null
-    Logging\Set-LogPath -Path $script:TestLogPath
-    
-    # Helper function to access module variables
-    function Get-StateManagementVar {
-        param([string]$VarName)
-        $module = Get-Module StateManagement
-        if ($module) {
-            return & $module ([scriptblock]::Create("return `$script:$VarName"))
-        }
-        return $null
-    }
+    $env = Initialize-StandardTestEnvironment -ModulesToImport @("Logging", "StateManagement", "StateVisualization") -TestLogPath $script:TestLogPath -IncludeStateManagement -IncludeCommonMocks
 }
 
-Describe "State Machine Visualization - Edge Cases" {
-    BeforeEach {
-        # Reset log file for each test
-        if (Test-Path $script:TestLogPath) {
-            Remove-Item $script:TestLogPath -Force
-        }
-        New-Item -Path $script:TestLogPath -ItemType File -Force | Out-Null
-        
-        # Reset state machine variables if available
+Describe "State Machine Visualization - Edge Cases" {    BeforeEach {
+        # Use standardized BeforeEach setup
+        Reset-TestLogFile -TestLogPath $script:TestLogPath
         if (Get-Command -Name Reset-StateMachineVariables -ErrorAction SilentlyContinue) {
             Reset-StateMachineVariables
         }

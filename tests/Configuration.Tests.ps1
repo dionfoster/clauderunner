@@ -1,28 +1,24 @@
 # Pester tests for Configuration module
 BeforeAll {
-    # Import the TestEnvironment helper
-    . "$PSScriptRoot\TestHelpers\TestEnvironment.ps1"
+    # Import test helpers
+    Import-Module "$PSScriptRoot\TestHelpers\TestHelpers.psm1" -Force
     
-    # Set up test environment
-    Initialize-TestEnvironment
-    
-    # Import the module to test
-    Import-Module "$PSScriptRoot\..\modules\Configuration.psm1" -Force
+    # Set up standardized test environment
+    $script:TestLogPath = Join-Path $TestDrive "test.log"
+    $env = Initialize-StandardTestEnvironment -ModulesToImport @("Logging", "Configuration") -TestLogPath $script:TestLogPath
     
     # Create a temporary config file for testing
     $script:TestConfigPath = "TestDrive:\test-config.yml"
-    
-    # Mock the Write-Log function to prevent console output during tests
-    # This assumes the Logging module is loaded by TestEnvironment
-    Mock Write-Log {}
     
     # Redirect exit function to prevent tests from exiting PowerShell
     function global:exit { param($Code) }
 }
 
 AfterAll {
-    # Clean up test environment
-    Remove-TestEnvironment
+    # Clean up test log file
+    if (Test-Path $script:TestLogPath) {
+        Remove-Item $script:TestLogPath -Force
+    }
     
     # Remove test config file
     if (Test-Path $script:TestConfigPath) {

@@ -1,25 +1,25 @@
 # Pester tests for Logging module
 BeforeAll {
-    # Import the TestEnvironment helper
-    . "$PSScriptRoot\TestHelpers\TestEnvironment.ps1"
+    # Import test helpers
+    Import-Module "$PSScriptRoot\TestHelpers\TestHelpers.psm1" -Force
     
-    # Set up test environment
-    Initialize-TestEnvironment
-    
-    # Import the module to test
-    Import-Module "$PSScriptRoot\..\modules\Logging.psm1" -Force
+    # Set up standardized test environment
+    $script:TestLogPath = Join-Path $TestDrive "test.log"
+    $env = Initialize-StandardTestEnvironment -ModulesToImport @("Logging") -TestLogPath $script:TestLogPath
 }
 
 AfterAll {
-    # Clean up test environment
-    Remove-TestEnvironment
+    # Clean up test log file
+    if (Test-Path $script:TestLogPath) {
+        Remove-Item $script:TestLogPath -Force
+    }
 }
 
 Describe "Logging Module" {
     Context "Write-Log" {
         BeforeEach {
             # Create a fresh log file for each test
-            Reset-LogFile
+            Reset-TestLogFile -TestLogPath $script:TestLogPath
         }
         
         It "Logs message with INFO level" {

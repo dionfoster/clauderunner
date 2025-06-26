@@ -1,39 +1,16 @@
 # Pester tests for state machine visualization
 BeforeAll {
-    # Set up test log path
-    $script:TestLogPath = Join-Path $TestDrive "test.log"
-      # Import modules directly in dependency order
-    Import-Module "$PSScriptRoot\..\modules\Logging.psm1" -Force
-    Import-Module "$PSScriptRoot\..\modules\StateManagement.psm1" -Force
-    Import-Module "$PSScriptRoot\..\modules\StateVisualization.psm1" -Force
-    
     # Import test helpers
-    . "$PSScriptRoot\TestHelpers\TestEnvironment.ps1"
+    Import-Module "$PSScriptRoot\TestHelpers\TestHelpers.psm1" -Force
     
-    # Initialize log file
-    New-Item -Path $script:TestLogPath -ItemType File -Force | Out-Null
-    Logging\Set-LogPath -Path $script:TestLogPath
-    
-    # Helper function to access module variables
-    function Get-StateManagementVar {
-        param([string]$VarName)
-        $module = Get-Module StateManagement
-        if ($module) {
-            return & $module ([scriptblock]::Create("return `$script:$VarName"))
-        }
-        return $null
-    }
-      # Create mock for Write-Host to avoid console output during tests
-    Mock Write-Host { } -ModuleName Logging
+    # Set up standardized test environment
+    $script:TestLogPath = Join-Path $TestDrive "test.log"
+    $env = Initialize-StandardTestEnvironment -ModulesToImport @("Logging", "StateManagement", "StateVisualization") -TestLogPath $script:TestLogPath -IncludeStateManagement -IncludeCommonMocks
 }
 
-Describe "State Machine Visualization - Basic Functions" {
-    BeforeEach {
-        # Reset log file for each test
-        if (Test-Path $script:TestLogPath) {
-            Remove-Item $script:TestLogPath -Force
-        }
-        New-Item -Path $script:TestLogPath -ItemType File -Force | Out-Null
+Describe "State Machine Visualization - Basic Functions" {    BeforeEach {
+        # Use standardized BeforeEach setup
+        Reset-TestLogFile -TestLogPath $script:TestLogPath
     }
     
     Context "Get-StateIcon" {
@@ -81,13 +58,8 @@ Describe "State Machine Visualization - Basic Functions" {
 
 Describe "State Machine Visualization - State Transitions" {
     BeforeEach {
-        # Reset log file for each test
-        if (Test-Path $script:TestLogPath) {
-            Remove-Item $script:TestLogPath -Force
-        }
-        New-Item -Path $script:TestLogPath -ItemType File -Force | Out-Null
-        
-        # Reset state machine variables if available
+        # Use standardized BeforeEach setup
+        Reset-TestLogFile -TestLogPath $script:TestLogPath
         if (Get-Command -Name Reset-StateMachineVariables -ErrorAction SilentlyContinue) {
             Reset-StateMachineVariables
         }

@@ -32,7 +32,13 @@ function Initialize-StandardTestEnvironment {
         [string[]]$ModulesToImport = @("Logging", "StateManagement", "StateVisualization"),
         
         [Parameter(Mandatory=$false)]
-        [string]$TestLogPath
+        [string]$TestLogPath,
+        
+        [Parameter(Mandatory=$false)]
+        [switch]$IncludeStateManagement,
+        
+        [Parameter(Mandatory=$false)]
+        [switch]$IncludeCommonMocks
     )
     
     # Determine test log path
@@ -51,17 +57,29 @@ function Initialize-StandardTestEnvironment {
     }
     New-Item -Path $TestLogPath -ItemType File -Force | Out-Null
     
-    # Import modules in dependency order
+    # Import modules in dependency order with Global scope
     foreach ($moduleName in $ModulesToImport) {
-        $modulePath = "$PSScriptRoot\..\modules\$moduleName.psm1"
+        $modulePath = "$PSScriptRoot\..\..\modules\$moduleName.psm1"
         if (Test-Path $modulePath) {
-            Import-Module $modulePath -Force
+            Import-Module $modulePath -Force -Global
+        } else {
+            Write-Warning "Module not found: $modulePath"
         }
     }
     
     # Set the log path for the logging module
     if (Get-Command -Name Set-LogPath -ErrorAction SilentlyContinue) {
         Set-LogPath -Path $TestLogPath
+    }
+    
+    # Add helper functions if state management is included
+    if ($IncludeStateManagement -or $ModulesToImport -contains "StateManagement") {
+        Add-StateManagementHelpers
+    }
+    
+    # Add common mocks if requested
+    if ($IncludeCommonMocks) {
+        Add-CommonTestMocks
     }
     
     return @{
@@ -123,6 +141,9 @@ function Assert-LogContent {
         [string]$TestLogPath,
         
         [Parameter(Mandatory=$false)]
+        [string]$Pattern,
+        
+        [Parameter(Mandatory=$false)]
         [string[]]$ExpectedPatterns = @(),
         
         [Parameter(Mandatory=$false)]
@@ -134,6 +155,11 @@ function Assert-LogContent {
     }
     
     $logContent = Get-Content -Path $TestLogPath -Raw
+    
+    # Handle single pattern parameter
+    if ($Pattern) {
+        $ExpectedPatterns += $Pattern
+    }
     
     foreach ($pattern in $ExpectedPatterns) {
         if ($logContent -notmatch $pattern) {
@@ -206,8 +232,11 @@ Additional setup commands to run in BeforeEach.
 #>
 function Get-StandardBeforeEach {
     param(
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory=$false)]
         [string]$TestLogPath,
+        
+        [Parameter(Mandatory=$false)]
+        [switch]$IncludeStateReset,
         
         [Parameter(Mandatory=$false)]
         [scriptblock]$AdditionalSetup
@@ -215,10 +244,13 @@ function Get-StandardBeforeEach {
     
     return {
         # Reset log file
-        Reset-TestLogFile -TestLogPath $TestLogPath
+        $logPath = if ($TestLogPath) { $TestLogPath } else { $script:TestLogPath }
+        if ($logPath) {
+            Reset-TestLogFile -TestLogPath $logPath
+        }
         
-        # Reset state machine variables if available
-        if (Get-Command -Name Reset-StateMachineVariables -ErrorAction SilentlyContinue) {
+        # Reset state machine variables if requested
+        if ($IncludeStateReset -and (Get-Command -Name Reset-StateMachineVariables -ErrorAction SilentlyContinue)) {
             Reset-StateMachineVariables
         }
         
@@ -226,8 +258,101 @@ function Get-StandardBeforeEach {
         if ($AdditionalSetup) {
             & $AdditionalSetup
         }
+    }.GetNewClosure()
+}
+
+<#
+.SYNOPSIS
+Adds helper functions for state management testing.
+
+.DESCRIPTION
+Creates global helper functions that are commonly needed for state management tests.
+#>
+function Add-StateManagementHelpers {
+    # Helper function to access module variables
+    function global:Get-StateManagementVar {
+        param([string]$VarName)
+        $module = Get-Module StateManagement
+        if ($module) {
+            return & $module ([scriptblock]::Create("return `$script:$VarName"))
+        }
+        return $null
+    }
+      # Helper function to reset state machine variables
+    function global:Reset-StateMachineVariables {
+        # Reset state machine variables if they exist
+        if (Get-Variable -Name "ProcessedStates" -Scope Global -ErrorAction SilentlyContinue) {
+            $global:ProcessedStates = @{}
+        }
+        if (Get-Variable -Name "TotalStartTime" -Scope Global -ErrorAction SilentlyContinue) {
+            $global:TotalStartTime = $null
+        }
+        if (Get-Variable -Name "CurrentState" -Scope Global -ErrorAction SilentlyContinue) {
+            $global:CurrentState = $null
+        }
     }
 }
 
+<#
+.SYNOPSIS
+Adds common test mocks used across multiple test files.
+
+.DESCRIPTION
+Sets up standard mocks that are frequently used in tests.
+#>
+function Add-CommonTestMocks {
+    # Mock for Write-Host to avoid console output during tests
+    if (Get-Module Logging) {
+        Mock Write-Host { } -ModuleName Logging
+    }
+}
+
+<#
+.SYNOPSIS
+Creates a standard BeforeAll scriptblock for test files.
+
+.DESCRIPTION
+Returns a scriptblock that can be used as BeforeAll in Pester tests.
+This ensures consistent setup across different test files.
+
+.PARAMETER ModulesToImport
+Array of module names to import.
+
+.PARAMETER IncludeStateManagement
+Include state management helper functions.
+
+.PARAMETER IncludeCommonMocks
+Include common test mocks.
+
+.PARAMETER TestLogPath
+Custom test log path (optional).
+#>
+function Get-StandardBeforeAll {
+    param(
+        [Parameter(Mandatory=$false)]
+        [string[]]$ModulesToImport = @("Logging", "StateManagement", "StateVisualization"),
+        
+        [Parameter(Mandatory=$false)]
+        [switch]$IncludeStateManagement,
+        
+        [Parameter(Mandatory=$false)]
+        [switch]$IncludeCommonMocks,
+        
+        [Parameter(Mandatory=$false)]
+        [string]$TestLogPath
+    )
+    
+    return {
+        # Set up test log path
+        $script:TestLogPath = if ($TestLogPath) { $TestLogPath } else { Join-Path $TestDrive "test.log" }
+        
+        # Import test helpers
+        . "$PSScriptRoot\TestHelpers\TestEnvironment.ps1"
+        
+        # Initialize standard test environment
+        $env = Initialize-StandardTestEnvironment -ModulesToImport $ModulesToImport -TestLogPath $script:TestLogPath -IncludeStateManagement:$IncludeStateManagement -IncludeCommonMocks:$IncludeCommonMocks
+    }.GetNewClosure()
+}
+
 # Export the functions
-Export-ModuleMember -Function Initialize-StandardTestEnvironment, Reset-TestLogFile, Assert-LogContent, New-StateManagementVariableMock, Get-StandardBeforeEach
+Export-ModuleMember -Function Initialize-StandardTestEnvironment, Reset-TestLogFile, Assert-LogContent, New-StateManagementVariableMock, Get-StandardBeforeEach, Add-StateManagementHelpers, Add-CommonTestMocks, Get-StandardBeforeAll
