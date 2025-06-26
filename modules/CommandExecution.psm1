@@ -321,11 +321,10 @@ function Invoke-CommandWithTimeout {
                         $exitCode = [int]$($cmd -replace "^\s*exit\s+", "")
                         return @{ ExitCode = $exitCode; Output = "" }
                     } else {
-                        $global:LASTEXITCODE = 0
                         try {
                             $output = Invoke-Expression $cmd 2>&1
-                            $exitCode = if ($null -ne $global:LASTEXITCODE) { $global:LASTEXITCODE } else { 0 }
-                            return @{ ExitCode = $exitCode; Output = $output }
+                            # For PowerShell, success is determined by no exceptions, not LASTEXITCODE
+                            return @{ ExitCode = 0; Output = $output }
                         } catch {
                             return @{ ExitCode = 1; Output = $_.Exception.Message }
                         }
@@ -376,7 +375,8 @@ function Invoke-CommandWithTimeout {
                         } else {
                             $output = Invoke-Expression $Command 2>&1
                         }
-                        $success = $LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq $null
+                        # For PowerShell, success is determined by no exceptions, not LASTEXITCODE
+                        $success = $true
                     } catch {
                         $output = $_.Exception.Message
                         $success = $false

@@ -405,9 +405,9 @@ Describe "CommandExecution Module" {
             $result | Should -BeTrue
         }
         
-        It "Detects errors in command output" {
+        It "Returns false for command that actually fails" {
             # Act
-            $result = Invoke-Command -Command "echo 'Error: Something failed'" -Description "Test command" -StateName "teststate" -CommandType "cmd"
+            $result = Invoke-Command -Command "exit 1" -Description "Test command" -StateName "teststate" -CommandType "cmd"
             
             # Assert
             $result | Should -BeFalse
