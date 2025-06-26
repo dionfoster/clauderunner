@@ -326,7 +326,7 @@ Describe "CommandExecution Module" {
             
             # Assert
             $result.Success | Should -BeTrue
-            Get-Location | Should -Be $originalLocation
+            (Get-Location).Path | Should -Be $originalLocation.Path
         }
         
         It "Does not change directory when PreserveWorkingDir is false" {
@@ -338,7 +338,7 @@ Describe "CommandExecution Module" {
             
             # Assert
             $result.Success | Should -BeTrue
-            Get-Location | Should -Be $originalLocation
+            (Get-Location).Path | Should -Be $originalLocation.Path
         }
         
         It "Executes command with timeout but completes in time" {

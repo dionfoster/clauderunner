@@ -297,26 +297,49 @@ function Invoke-CommandWithTimeout {
         [string]$StateName = ""
     )
     
-    # Save current location if we need to preserve it
-    $originalLocation = $null
-    if ($PreserveWorkingDir -and $WorkingDirectory) {
-        $originalLocation = Get-Location
-        Set-Location -Path $WorkingDirectory
-    }
+    # For commands that need working directory, handle them via jobs or Start-Process
+    # Never change the PowerShell session's current directory
     
     try {
         if ($TimeoutSeconds -gt 0) {
             if ($CommandType -eq "cmd") {
-                $job = Start-Job -ScriptBlock { param($cmd) cmd /c $cmd } -ArgumentList $Command
+                $job = Start-Job -ScriptBlock { param($cmd, $workDir) 
+                    if ($workDir) {
+                        $output = cmd /c "cd /d `"$workDir`" && $cmd" 2>&1
+                    } else {
+                        $output = cmd /c $cmd 2>&1
+                    }
+                    return @{ ExitCode = $LASTEXITCODE; Output = $output }
+                } -ArgumentList $Command, $WorkingDirectory
             } else {
-                $job = Start-Job -ScriptBlock { param($cmd) Invoke-Expression $cmd } -ArgumentList $Command
+                $job = Start-Job -ScriptBlock { param($cmd, $workDir) 
+                    if ($workDir) {
+                        Set-Location -Path $workDir
+                    }
+                    # Special handling for exit commands in jobs
+                    if ($cmd -match "^\s*exit\s+(\d+)\s*$") {
+                        $exitCode = [int]$($cmd -replace "^\s*exit\s+", "")
+                        return @{ ExitCode = $exitCode; Output = "" }
+                    } else {
+                        $global:LASTEXITCODE = 0
+                        try {
+                            $output = Invoke-Expression $cmd 2>&1
+                            $exitCode = if ($null -ne $global:LASTEXITCODE) { $global:LASTEXITCODE } else { 0 }
+                            return @{ ExitCode = $exitCode; Output = $output }
+                        } catch {
+                            return @{ ExitCode = 1; Output = $_.Exception.Message }
+                        }
+                    }
+                } -ArgumentList $Command, $WorkingDirectory
             }
             
             $completed = Wait-Job $job -Timeout $TimeoutSeconds
             
             if ($completed) {
-                $output = Receive-Job $job
-                $success = $job.State -eq "Completed"
+                $jobResult = Receive-Job $job
+                $output = if ($jobResult -is [hashtable]) { $jobResult.Output } else { $jobResult }
+                $exitCode = if ($jobResult -is [hashtable]) { $jobResult.ExitCode } else { 0 }
+                $success = $exitCode -eq 0
                 Remove-Job $job
                 return @{ Success = $success; Output = $output }
             } else {
@@ -325,21 +348,46 @@ function Invoke-CommandWithTimeout {
                 return @{ Success = $false; Output = "Timeout after $TimeoutSeconds seconds" }
             }
         } else {
+            # For non-timeout scenarios, handle directly but with special cases
             if ($CommandType -eq "cmd") {
-                $output = cmd /c $Command 2>&1
+                if ($WorkingDirectory) {
+                    $output = cmd /c "cd /d `"$WorkingDirectory`" && $Command" 2>&1
+                } else {
+                    $output = cmd /c $Command 2>&1
+                }
                 $success = $LASTEXITCODE -eq 0
             } else {
-                $output = Invoke-Expression $Command 2>&1
-                $success = $LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq $null
+                # Special handling for exit commands
+                if ($Command -match "^\s*exit\s+(\d+)\s*$") {
+                    $exitCode = [int]$Matches[1]
+                    $output = ""
+                    $success = $exitCode -eq 0
+                } else {
+                    try {
+                        # Handle working directory for PowerShell commands
+                        if ($WorkingDirectory) {
+                            $originalLocation = Get-Location
+                            try {
+                                Set-Location -Path $WorkingDirectory
+                                $output = Invoke-Expression $Command 2>&1
+                            } finally {
+                                Set-Location -Path $originalLocation
+                            }
+                        } else {
+                            $output = Invoke-Expression $Command 2>&1
+                        }
+                        $success = $LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq $null
+                    } catch {
+                        $output = $_.Exception.Message
+                        $success = $false
+                    }
+                }
             }
             return @{ Success = $success; Output = $output }
         }
     }
     finally {
-        # Always restore the original location if we changed it
-        if ($originalLocation) {
-            Set-Location -Path $originalLocation
-        }
+        # No need to restore location since we never change it
     }
 }
 
@@ -409,7 +457,7 @@ function Invoke-Command {
     try {        # Execute command
         $icon = "⏳"  # Use direct icon instead of calling function
         $result = Invoke-CommandWithTimeout -Command $transformedCommand.Command `
-                                           -CommandType $transformedCommand.CommandType `
+                                           -CommandType $CommandType `
                                            -TimeoutSeconds $TimeoutSeconds `
                                            -Icon $icon `
                                            -PreserveWorkingDir $transformedCommand.PreserveWorkingDir `

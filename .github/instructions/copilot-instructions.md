@@ -71,6 +71,7 @@ applyTo: '**'
 
 ## Testing
 - Use Pester for all tests
+- When mocking, use Pester's `Mock` cmdlet to create mocks for dependencies
 - When fixing broken tests, focus on fixing the functional issue, not adjusting the tests unless they are incorrect
 - Ensure that tests are written to cover the functionality, not just to pass
 - Before adding new tests, ensure that the existing tests are passing and the syntax is correct, DO NOT CONTINUE IF SYNTAX IS INCORRECT
