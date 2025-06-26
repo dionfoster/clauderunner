@@ -46,6 +46,64 @@ apiHost: "test-api-host"
         }
     }
     
+    Context "Initialize-Environment" {
+        It "Runs without throwing when powershell-yaml is already available" {
+            # This test verifies the function can be called without throwing
+            # In practice, this would skip installation if the module is available
+            { Initialize-Environment } | Should -Not -Throw
+        }
+    }
+    
+    Context "Get-Configuration" {
+        It "Returns null when config file does not exist" {
+            # Arrange
+            $nonExistentPath = "TestDrive:\non-existent.yml"
+            Set-ConfigPath -Path $nonExistentPath
+            
+            # Act
+            $result = Get-Configuration
+            
+            # Assert
+            $result | Should -Be $null
+        }
+        
+        It "Successfully loads and parses valid YAML configuration" {
+            # Arrange
+            $testConfigPath = "TestDrive:\valid-config.yml"
+            $yamlContent = @"
+states:
+  test:
+    actions:
+      - type: command
+        command: echo test
+"@
+            Set-Content -Path $testConfigPath -Value $yamlContent
+            Set-ConfigPath -Path $testConfigPath
+            
+            # Act
+            $result = Get-Configuration
+            
+            # Assert
+            $result | Should -Not -Be $null
+            $result.states | Should -Not -Be $null
+            $result.states.test | Should -Not -Be $null
+        }
+        
+        It "Handles YAML parsing errors gracefully" {
+            # Arrange
+            $testConfigPath = "TestDrive:\invalid-config.yml"
+            $invalidYaml = "invalid: yaml: content: [unclosed"
+            Set-Content -Path $testConfigPath -Value $invalidYaml
+            Set-ConfigPath -Path $testConfigPath
+            
+            # Act
+            $result = Get-Configuration
+            
+            # Assert
+            $result | Should -Be $null
+        }
+    }
+    
     Context "Test-StateConfiguration" {
         BeforeEach {
             # Redirect functions
@@ -95,10 +153,47 @@ apiHost: "test-api-host"
             { Test-StateConfiguration -StateConfig $stateConfig -StateName "testState" } | Should -Not -Throw
         }
         
+        It "Validates a correct state configuration with waitEndpoint readiness check" {
+            # Arrange
+            $stateConfig = @{
+                readiness = @{
+                    waitEndpoint = "http://localhost:8000/health"
+                }
+            }
+            
+            # Act & Assert
+            { Test-StateConfiguration -StateConfig $stateConfig -StateName "testState" } | Should -Not -Throw
+        }
+        
+        It "Validates a correct state configuration with checkCommand readiness check" {
+            # Arrange
+            $stateConfig = @{
+                readiness = @{
+                    checkCommand = "echo ready"
+                }
+            }
+            
+            # Act & Assert
+            { Test-StateConfiguration -StateConfig $stateConfig -StateName "testState" } | Should -Not -Throw
+        }
+        
         It "Throws when state has no actions or readiness check" {
             # Arrange
             $stateConfig = @{
                 someProperty = "value"
+            }
+            
+            # Act & Assert
+            { Test-StateConfiguration -StateConfig $stateConfig -StateName "testState" } | 
+                Should -Throw "State 'testState' has no actions or valid readiness check defined"
+        }
+        
+        It "Throws when state has readiness but no valid check properties" {
+            # Arrange
+            $stateConfig = @{
+                readiness = @{
+                    invalidProperty = "value"
+                }
             }
             
             # Act & Assert
@@ -152,6 +247,65 @@ apiHost: "test-api-host"
             # Act & Assert
             { Test-StateConfiguration -StateConfig $stateConfig -StateName "testState" } | 
                 Should -Throw "Invalid application action in state 'testState': missing 'path' property"
+        }
+        
+        It "Accepts string actions (legacy format)" {
+            # Arrange
+            $stateConfig = @{
+                actions = @(
+                    "echo test"
+                )
+            }
+            
+            # Act & Assert
+            { Test-StateConfiguration -StateConfig $stateConfig -StateName "testState" } | Should -Not -Throw
+        }
+        
+        It "Accepts mixed string and object actions" {
+            # Arrange
+            $stateConfig = @{
+                actions = @(
+                    "echo test",
+                    @{
+                        type = "command"
+                        command = "echo test2"
+                    }
+                )
+            }
+            
+            # Act & Assert
+            { Test-StateConfiguration -StateConfig $stateConfig -StateName "testState" } | Should -Not -Throw
+        }
+        
+        It "Validates state configuration with both actions and readiness check" {
+            # Arrange
+            $stateConfig = @{
+                actions = @(
+                    @{
+                        type = "command"
+                        command = "echo test"
+                    }
+                )
+                readiness = @{
+                    checkEndpoint = "http://localhost:8000/health"
+                }
+            }
+            
+            # Act & Assert
+            { Test-StateConfiguration -StateConfig $stateConfig -StateName "testState" } | Should -Not -Throw
+        }
+        
+        It "Validates empty actions array with readiness check" {
+            # Arrange
+            $stateConfig = @{
+                actions = @()
+                readiness = @{
+                    checkCommand = "echo ready"
+                }
+            }
+            
+            # Act & Assert
+            { Test-StateConfiguration -StateConfig $stateConfig -StateName "testState" } | Should -Not -Throw
         }
     }
 }
