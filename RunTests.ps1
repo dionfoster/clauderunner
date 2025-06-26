@@ -120,11 +120,15 @@ if ($null -eq $results) {
         
         Write-Host "`n----- Code Coverage -----" -ForegroundColor Cyan
         Write-Host "Coverage: $coveragePercent%" -ForegroundColor $coverageColor
-        Write-Host "Lines Covered: $($results.CodeCoverage.CoveredCommands)" -ForegroundColor Cyan
-        Write-Host "Lines Missed: $($results.CodeCoverage.MissedCommands)" -ForegroundColor Cyan
+        Write-Host "Lines Covered: $($results.CodeCoverage.CommandsExecutedCount)" -ForegroundColor Green
+        Write-Host "Lines Missed: $($results.CodeCoverage.CommandsMissedCount)" -ForegroundColor Red
         
         if ($config.CodeCoverage.OutputPath) {
-            Write-Host "Coverage report saved to: $($config.CodeCoverage.OutputPath)" -ForegroundColor Cyan
+            $reportPath = $config.CodeCoverage.OutputPath
+            if ($reportPath -like "*coverage.xml*" -and (Test-Path "$PSScriptRoot\TestResults\coverage.xml")) {
+                $reportPath = "$PSScriptRoot\TestResults\coverage.xml"
+            }
+            Write-Host "Coverage report saved to: $reportPath" -ForegroundColor Cyan
         }
         
         # Check coverage threshold if specified
