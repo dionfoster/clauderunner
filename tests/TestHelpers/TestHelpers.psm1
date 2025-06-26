@@ -315,6 +315,90 @@ function Add-CommonTestMocks {
     if (Get-Module Logging) {
         Mock Write-Host { } -ModuleName Logging
     }
+    
+    # Mock for Write-Log function used in modules (global mock for tests)
+    if (-not (Get-Command -Name Write-Log -ErrorAction SilentlyContinue)) {
+        function global:Write-Log {
+            param(
+                [Parameter(Mandatory = $true)]
+                [string]$Message,
+                
+                [Parameter(Mandatory = $false)]
+                [string]$Level = "INFO",
+                
+                [Parameter(Mandatory = $false)]
+                [string]$LogPath
+            )
+            
+            # When running in tests, write to the test log file
+            $timestamp = Get-Date -Format "HH:mm:ss"
+            $emoji = "🔧"
+            
+            # Use the TestLogPath if no LogPath is provided
+            if (-not $LogPath) {
+                $LogPath = if (Get-Variable -Name TestLogPath -Scope Script -ErrorAction SilentlyContinue) { 
+                    $script:TestLogPath 
+                } else { 
+                    "$env:TEMP\claude_test.log" 
+                }
+            }
+            
+            # Log with timestamp to file
+            $logMessage = "[$timestamp] [$Level] $emoji │  $Message"
+            $logMessage | Out-File -FilePath $LogPath -Append -Encoding UTF8
+        }
+    }
+    
+    # Mock for exit function to prevent tests from exiting PowerShell
+    if (-not (Get-Command -Name exit -ErrorAction SilentlyContinue)) {
+        function global:exit {
+            param(
+                [Parameter(Mandatory = $false)]
+                [int]$ExitCode = 0
+            )
+            
+            # When running in tests, we don't want to actually exit the process
+            return
+        }
+    }
+    
+    # Mock for ConvertFrom-Yaml function used in Configuration module
+    if (-not (Get-Command -Name ConvertFrom-Yaml -ErrorAction SilentlyContinue)) {
+        function global:ConvertFrom-Yaml {
+            param(
+                [Parameter(Mandatory = $true)]
+                [string]$YamlString
+            )
+            
+            # Simple YAML parser for tests - handles basic key-value pairs
+            $result = @{}
+            $lines = $YamlString -split "`n"
+            
+            foreach ($line in $lines) {
+                if ([string]::IsNullOrWhiteSpace($line) -or $line.Trim().StartsWith('#')) {
+                    continue
+                }
+                
+                $content = $line.Trim()
+                if ($content -match '^([^:]+):\s*(.*)$') {
+                    $key = $Matches[1].Trim()
+                    $value = $Matches[2].Trim()
+                    
+                    if (-not [string]::IsNullOrEmpty($value)) {
+                        # Remove quotes if present
+                        if ($value -match '^"(.*)"$' -or $value -match '^''(.*)''$') {
+                            $value = $Matches[1]
+                        }
+                        $result[$key] = $value
+                    } else {
+                        $result[$key] = @{}
+                    }
+                }
+            }
+            
+            return $result
+        }
+    }
 }
 
 <#
@@ -355,9 +439,6 @@ function Get-StandardBeforeAll {
     return {
         # Set up test log path
         $script:TestLogPath = if ($TestLogPath) { $TestLogPath } else { Join-Path $TestDrive "test.log" }
-        
-        # Import test helpers
-        . "$PSScriptRoot\TestHelpers\TestEnvironment.ps1"
         
         # Initialize standard test environment
         $env = Initialize-StandardTestEnvironment -ModulesToImport $ModulesToImport -TestLogPath $script:TestLogPath -IncludeStateManagement:$IncludeStateManagement -IncludeCommonMocks:$IncludeCommonMocks
@@ -400,6 +481,37 @@ function Set-ScriptVariableMock {
     } else {
         Write-Warning "Module $ModuleName not found. Cannot set script variable $Name."
     }
+}
+
+<#
+.SYNOPSIS
+Common test patterns and constants used across test files.
+#>
+$global:CommonTestPatterns = @{
+    StateHeader = "┌─ STATE: 🔄"
+    DependenciesNone = "Dependencies: none"
+    ActionsHeader = "Actions:"
+    StateTransitions = "STATE TRANSITIONS:"
+    ExecutionSummary = "EXECUTION SUMMARY"
+    ResultCompleted = "Result: ✅ COMPLETED"
+    ResultFailed = "Result: ❌ FAILED"
+    StatusSuccess = "Status: ✓ SUCCESS"
+    StatusFailed = "Status: ✗ FAILED"
+}
+
+# Global state machine variables for testing
+$global:StatusIcons = @{
+    "Processing"  = "🔄"
+    "Completed"   = "✅"
+    "Failed"      = "❌"
+    "Skipped"     = "⏭️"
+    "Executing"   = "⏳"
+    "Success"     = "✓"
+    "Error"       = "✗"
+    "Warning"     = "⚠️"
+    "Checking"    = "🔍"
+    "Ready"       = "✅"
+    "NotReady"    = "❌"
 }
 
 # Export the functions
