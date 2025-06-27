@@ -457,9 +457,27 @@ function Format-MediumOutput {
     
     # Header: Boxed header with target name
     $targetState = if ($Summary.TargetState) { $Summary.TargetState } else { "unknown" }
+    
+    # Calculate proper spacing for alignment
+    # Total box width is 80 characters
+    # Inner content width is 78 characters (between the ║ symbols)
+    $titleText = "🚀 Claude Task Runner"
+    $titleLength = $titleText.Length  # This will be 21
+    $titlePadding = 78 - $titleLength
+    $titleLeftPad = [math]::Floor($titlePadding / 2)
+    $titleRightPad = $titlePadding - $titleLeftPad
+    $runnerLine = "║" + " " * $titleLeftPad + $titleText + " " * $titleRightPad + "║"
+    
+    # For target line: "Target: " + targetState
+    $targetContent = "Target: $targetState"
+    $targetPadding = 78 - $targetContent.Length
+    $targetLeftPad = [math]::Floor($targetPadding / 2)
+    $targetRightPad = $targetPadding - $targetLeftPad
+    $targetLine = "║" + " " * $targetLeftPad + $targetContent + " " * $targetRightPad + "║"
+    
     $output += "╔══════════════════════════════════════════════════════════════════════════════╗"
-    $output += "║                        🚀 Claude Task Runner                                ║"
-    $output += "║                         Target: $($targetState.PadRight(43))║"
+    $output += $runnerLine
+    $output += $targetLine
     $output += "╚══════════════════════════════════════════════════════════════════════════════╝"
     $output += ""
     
