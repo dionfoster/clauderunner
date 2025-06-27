@@ -155,41 +155,71 @@ function Write-StateComplete-Simple {
 
 # Medium format real-time functions
 function Write-StateTransitionsHeader-Medium {
-    return $null  # No header during execution - summary shows all in proper format
+    return @(
+        "📋 TASK EXECUTION",
+        "=================="
+    )
 }
 
 function Write-StateStart-Medium {
     param([string]$StateName, [string]$StateIcon, [string[]]$Dependencies)
-    return $null  # Minimal output during execution
+    
+    $output = @("▶ Processing: $StateName $StateIcon")
+    if ($Dependencies.Count -gt 0) {
+        $depStatus = $Dependencies | ForEach-Object { "$_ ✓" }
+        $output += "  Prerequisites: $($depStatus -join ', ')"
+    }
+    return $output
 }
 
 function Write-StateCheck-Medium {
     param([string]$CheckType, [string]$CheckDetails)
-    return $null  # No check details during execution
+    return "  🔍 Checking: $CheckType → $CheckDetails"
 }
 
 function Write-StateCheckResult-Medium {
     param([bool]$IsReady, [string]$CheckType, [string]$AdditionalInfo)
-    return $null  # No check result during execution
+    
+    if ($IsReady) {
+        $info = if ($AdditionalInfo) { " ($AdditionalInfo)" } else { "" }
+        return "  ✅ Result: READY$info"
+    } else {
+        return "  ⚠️ Result: Not ready, executing actions..."
+    }
 }
 
 function Write-StateActionsHeader-Medium {
-    return $null  # No actions header during execution
+    return "  🚀 Executing actions..."
 }
 
 function Write-StateActionStart-Medium {
     param([string]$ActionType, [string]$Description, [string]$ActionCommand)
-    return $null  # No action start output
+    
+    $desc = if ($Description) { $Description } else { $ActionCommand }
+    return "    ⏳ $ActionType`: $desc"
 }
 
 function Write-StateActionComplete-Medium {
     param([bool]$Success, [string]$ErrorMessage, [double]$Duration)
-    return $null  # No action completion output
+    
+    if ($Success) {
+        $durationText = if ($Duration -gt 0) { " (${Duration}s)" } else { "" }
+        return "    ✅ Completed$durationText"
+    } else {
+        $errorText = if ($ErrorMessage) { " - $ErrorMessage" } else { "" }
+        return "    ❌ Failed$errorText"
+    }
 }
 
 function Write-StateComplete-Medium {
     param([bool]$Success, [string]$ErrorMessage, [double]$Duration, [string]$StateName = "")
-    return $null  # No state completion output
+    
+    if ($Success) {
+        return "  ✅ $StateName completed (${Duration}s)"
+    } else {
+        $errorText = if ($ErrorMessage) { " - $ErrorMessage" } else { "" }
+        return "  ❌ $StateName failed (${Duration}s)$errorText"
+    }
 }
 
 # Elaborate format real-time functions
