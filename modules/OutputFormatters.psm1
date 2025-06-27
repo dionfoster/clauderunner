@@ -518,8 +518,8 @@ function Format-MediumOutput {
         $stateNames = $Summary.StateStartTimes.GetEnumerator() | Sort-Object Value | ForEach-Object { $_.Key }
         $flowLine = $stateNames | ForEach-Object { "[$_]" }
         $output += $flowLine -join " ──→ "
-        $output += ""
     }
+    $output += ""
     
     # State Details
     $output += "🔍 STATE DETAILS"

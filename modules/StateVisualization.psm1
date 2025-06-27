@@ -465,9 +465,9 @@ function Write-StateSummary {
                 $formattedOutput = & $formatter -Summary $summary -Success $success -ErrorMessage $errorMessage -Duration $totalDuration
                 if ($formattedOutput -and $formattedOutput.Count -gt 0) {
                     foreach ($line in $formattedOutput) {
-                        if ($line -and $line.Trim() -ne "") {
+                        if ($null -ne $line -and $line.Trim() -ne "") {
                             Write-Log -Level "SYSTEM" $line
-                        } elseif ($line -eq " ") {
+                        } elseif ($null -ne $line -and ($line -eq "" -or $line -eq " ")) {
                             Write-Log -Level "SYSTEM" " "
                         }
                     }

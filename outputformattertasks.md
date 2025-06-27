@@ -48,6 +48,13 @@ The Medium format currently suppresses all real-time output during execution and
 - No conflicts between real-time and summary output
 - Users now see progress during long-running operations regardless of format choice
 
+### Medium Format Spacing Fix (Latest)
+- **Issue**: Missing blank line between execution flow and STATE DETAILS header in Medium format summary
+- **Root Cause**: StateVisualization.psm1 was not properly handling empty string lines from formatter output
+- **Fix**: Updated the output handling logic to properly write empty strings as blank lines
+- **Result**: Medium format summary now correctly matches the success-medium.template with proper spacing
+- **Verification**: All 157 tests still pass; spacing now matches template exactly
+
 ### Design Principles
 - Real-time output should give users confidence that the system is working
 - Each format should have its own visual identity for both real-time and summary output
