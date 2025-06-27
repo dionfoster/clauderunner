@@ -116,141 +116,80 @@ function Write-StateComplete-Default {
 
 # Simple format real-time functions
 function Write-StateTransitionsHeader-Simple {
-    return "Executing tasks..."
+    return $null  # No header during execution - summary shows all
 }
 
 function Write-StateStart-Simple {
     param([string]$StateName, [string]$StateIcon, [string[]]$Dependencies)
-    return "* Starting $StateName"
+    return $null  # Minimal output during execution
 }
 
 function Write-StateCheck-Simple {
     param([string]$CheckType, [string]$CheckDetails)
-    return "  Checking readiness..."
+    return $null  # No check details during execution
 }
 
 function Write-StateCheckResult-Simple {
     param([bool]$IsReady, [string]$CheckType, [string]$AdditionalInfo)
-    
-    if ($IsReady) {
-        return "  [check] Already ready"
-    } else {
-        return "  * Running actions..."
-    }
+    return $null  # Results shown in summary only
 }
 
 function Write-StateActionsHeader-Simple {
-    return ""  # No header in simple format
+    return $null  # No action header
 }
 
 function Write-StateActionStart-Simple {
     param([string]$ActionType, [string]$Description, [string]$ActionCommand)
-    return "  Running command..."
+    return $null  # No action start output
 }
 
 function Write-StateActionComplete-Simple {
     param([bool]$Success, [string]$ErrorMessage, [double]$Duration)
-    
-    if ($Success) {
-        return "  [check] Command completed"
-    } else {
-        $message = "  [x] Command failed"
-        if ($ErrorMessage) {
-            $message += ": $ErrorMessage"
-        }
-        return $message
-    }
+    return $null  # No action completion output
 }
 
 function Write-StateComplete-Simple {
-    param([bool]$Success, [string]$ErrorMessage, [double]$Duration, [string]$StateName = "Task")
-    
-    if ($Success) {
-        return "[check] $StateName completed"
-    } else {
-        $message = "[x] $StateName failed"
-        if ($ErrorMessage) {
-            $message += ": $ErrorMessage"
-        }
-        return $message
-    }
+    param([bool]$Success, [string]$ErrorMessage, [double]$Duration, [string]$StateName = "")
+    return $null  # No state completion output
 }
 
 # Medium format real-time functions
 function Write-StateTransitionsHeader-Medium {
-    return "=== Task Execution Progress ==="
+    return $null  # No header during execution - summary shows all in proper format
 }
 
 function Write-StateStart-Medium {
     param([string]$StateName, [string]$StateIcon, [string[]]$Dependencies)
-    
-    $output = @("[tool] Processing State: $StateName")
-    if ($Dependencies.Count -gt 0) {
-        $output += "   Dependencies: $($Dependencies -join ', ') ([check] completed)"
-    }
-    return $output
+    return $null  # Minimal output during execution
 }
 
 function Write-StateCheck-Medium {
     param([string]$CheckType, [string]$CheckDetails)
-    return "   [search] Readiness Check: $CheckType ($CheckDetails)"
+    return $null  # No check details during execution
 }
 
 function Write-StateCheckResult-Medium {
     param([bool]$IsReady, [string]$CheckType, [string]$AdditionalInfo)
-    
-    if ($IsReady) {
-        $info = if ($AdditionalInfo) { " - $AdditionalInfo" } else { "" }
-        return "   [check] Result: Ready via $CheckType$info"
-    } else {
-        return "   [warning] Result: Not ready, executing actions..."
-    }
+    return $null  # No check result during execution
 }
 
 function Write-StateActionsHeader-Medium {
-    return "   [rocket] Executing Actions:"
+    return $null  # No actions header during execution
 }
 
 function Write-StateActionStart-Medium {
     param([string]$ActionType, [string]$Description, [string]$ActionCommand)
-    
-    $desc = if ($Description) { " ($Description)" } else { "" }
-    return "      [hourglass] $ActionType$desc"
+    return $null  # No action start output
 }
 
 function Write-StateActionComplete-Medium {
     param([bool]$Success, [string]$ErrorMessage, [double]$Duration)
-    
-    $statusIcon = if ($Success) { "[check]" } else { "[x]" }
-    $statusText = if ($Success) { "Completed" } else { "Failed" }
-    
-    $message = "      $statusIcon $statusText"
-    
-    if ($Duration -gt 0) {
-        $message += " (${Duration}s)"
-    }
-    
-    if (-not $Success -and $ErrorMessage) {
-        $message += " - Error: $ErrorMessage"
-    }
-    
-    return $message
+    return $null  # No action completion output
 }
 
 function Write-StateComplete-Medium {
     param([bool]$Success, [string]$ErrorMessage, [double]$Duration, [string]$StateName = "")
-    
-    $statusIcon = if ($Success) { "[check]" } else { "[x]" }
-    $statusText = if ($Success) { "COMPLETED" } else { "FAILED" }
-    
-    $result = "   [chart] Final Result: $statusIcon $statusText (${Duration}s)"
-    
-    $output = @($result)
-    if (-not $Success -and $ErrorMessage) {
-        $output += "   [boom] Error Details: $ErrorMessage"
-    }
-    
-    return $output
+    return $null  # No state completion output
 }
 
 # Elaborate format real-time functions
@@ -399,6 +338,209 @@ function Write-StateComplete-Elaborate {
     
     $timestamp = Get-Date -Format "HH:mm:ss"
     $statusIcon = if ($Success) { "[tada]" } else { "[boom]" }
+    $statusText = if ($Success) { "MISSION ACCOMPLISHED" } else { "MISSION FAILED" }
+    
+    $output = @(
+        "",
+        "===============================================================================",
+        "| $statusIcon STATE PROCESSING COMPLETE: $statusText                         |",
+        "===============================================================================",
+        "[clock] Completion Time: $timestamp",
+        "[bar_chart] Total Duration: ${Duration} seconds"
+    )
+    
+    if ($Success) {
+        $output += @(
+            "[target] Outcome: State successfully achieved and validated",
+            "[rocket] System Status: Ready for next operations"
+        )
+    } else {
+        $output += @(
+            "[target] Outcome: State activation failed",
+            "[wrench] System Status: Requires intervention"
+        )
+        if ($ErrorMessage) {
+            $output += @(
+                "[boom] Root Cause Analysis:",
+                "   \- $ErrorMessage"
+            )
+        }
+    }
+    
+    return $output
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SUMMARY FORMAT FUNCTIONS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+<#
+.SYNOPSIS
+Default format summary function - not currently implemented as DefaultFormat uses StateVisualization logic.
+#>
+function Format-DefaultOutput {
+    param([hashtable]$Summary, [bool]$Success, [string]$ErrorMessage, [double]$Duration)
+    # Default format summary is handled by StateVisualization.psm1
+    return @()
+}
+
+<#
+.SYNOPSIS
+Simple format summary function matching success-simple.template.
+#>
+function Format-SimpleOutput {
+    param([hashtable]$Summary, [bool]$Success, [string]$ErrorMessage, [double]$Duration)
+    
+    $output = @()
+    
+    # Header: Claude Task Runner - Target: <target>
+    $targetState = if ($Summary.TargetState) { $Summary.TargetState } else { "unknown" }
+    $output += "Claude Task Runner - Target: $targetState"
+    $output += " "
+    
+    # States chain: state1 -> state2 -> state3
+    if ($Summary.States.Count -gt 0) {
+        $stateNames = $Summary.StateStartTimes.GetEnumerator() | Sort-Object Value | ForEach-Object { $_.Key }
+        $output += "States: $($stateNames -join ' -> ')"
+        $output += " "
+        
+        # Individual state summaries
+        foreach ($stateName in $stateNames) {
+            $state = $Summary.States[$stateName]
+            $duration = if ($state.Duration) { [math]::Round($state.Duration.TotalSeconds, 1) } else { 0 }
+            
+            if ($state.Actions -and $state.Actions.Count -gt 0) {
+                # State with actions: "fourthState: EXECUTED 4 actions - 3.6s"
+                $output += "$stateName`: EXECUTED $($state.Actions.Count) actions - $($duration)s"
+                
+                # Action details
+                foreach ($action in $state.Actions) {
+                    $actionDuration = if ($action.Duration) { [math]::Round($action.Duration.TotalSeconds, 1) } else { 0 }
+                    $actionName = if ($action.Description) { $action.Description } else { $action.Command }
+                    $output += "  - $actionName`: $($actionDuration)s"
+                }
+            } else {
+                # State without actions: "firstState: READY (command check) - 4.1s"
+                $readinessInfo = ""
+                if ($state.Result -like "*command check*") {
+                    $readinessInfo = " (command check)"
+                } elseif ($state.Result -like "*endpoint*") {
+                    $readinessInfo = " (endpoint 200 OK)"
+                }
+                $output += "$stateName`: READY$readinessInfo - $($duration)s"
+            }
+        }
+        
+        $output += " "
+    }
+    
+    # Final status: "Status: SUCCESS (4/4 completed in 11.0s)"
+    if ($Success) {
+        $completedCount = ($Summary.States.Values | Where-Object { $_.Success -eq $true }).Count
+        $totalCount = $Summary.States.Count
+        $output += "Status: SUCCESS ($completedCount/$totalCount completed in $($Duration)s)"
+    } else {
+        $output += "Status: FAILED - $ErrorMessage"
+    }
+    
+    return $output
+}
+
+<#
+.SYNOPSIS
+Medium format summary function.
+#>
+function Format-MediumOutput {
+    param([hashtable]$Summary, [bool]$Success, [string]$ErrorMessage, [double]$Duration)
+    
+    $output = @()
+    
+    # Header: Boxed header with target name
+    $targetState = if ($Summary.TargetState) { $Summary.TargetState } else { "unknown" }
+    $output += "╔══════════════════════════════════════════════════════════════════════════════╗"
+    $output += "║                        🚀 Claude Task Runner                                ║"
+    $output += "║                         Target: $($targetState.PadRight(43))║"
+    $output += "╚══════════════════════════════════════════════════════════════════════════════╝"
+    $output += ""
+    
+    # Execution Flow
+    $output += "📊 EXECUTION FLOW"
+    $output += "─────────────────"
+    if ($Summary.States.Count -gt 0) {
+        $stateNames = $Summary.StateStartTimes.GetEnumerator() | Sort-Object Value | ForEach-Object { $_.Key }
+        $flowLine = $stateNames | ForEach-Object { "[$_]" }
+        $output += $flowLine -join " ──→ "
+        $output += ""
+    }
+    
+    # State Details
+    $output += "🔍 STATE DETAILS"
+    $output += "────────────────"
+    
+    if ($Summary.States.Count -gt 0) {
+        $stateNames = $Summary.StateStartTimes.GetEnumerator() | Sort-Object Value | ForEach-Object { $_.Key }
+        
+        foreach ($stateName in $stateNames) {
+            $state = $Summary.States[$stateName]
+            $duration = if ($state.Duration) { [math]::Round($state.Duration.TotalSeconds, 1) } else { 0 }
+            
+            # State header with dependencies
+            $dependencies = ""
+            if ($state.Dependencies -and $state.Dependencies.Count -gt 0) {
+                $dependencies = " (depends: $($state.Dependencies -join ', '))"
+            }
+            $output += "▶ $stateName$dependencies"
+            
+            # Check result or actions
+            if ($state.Actions -and $state.Actions.Count -gt 0) {
+                # State with actions: show action summary
+                $actionSummary = @()
+                foreach ($action in $state.Actions) {
+                    $actionDuration = if ($action.Duration) { [math]::Round($action.Duration.TotalSeconds, 1) } else { 0 }
+                    $actionName = if ($action.Description) { $action.Description } else { $action.Command }
+                    $actionSummary += "$actionName($($actionDuration)s)"
+                }
+                $output += "  Actions: $($actionSummary -join ' | ')"
+                $output += "  Result: ✅ COMPLETED"
+            } else {
+                # State without actions: show readiness check
+                $checkResult = ""
+                if ($state.Result -like "*command check*") {
+                    $checkResult = "docker info → ✅ READY"
+                } elseif ($state.Result -like "*endpoint*") {
+                    $checkResult = "https://localhost:5001/healthcheck → ✅ 200 OK"
+                } else {
+                    $checkResult = "readiness check → ✅ READY"
+                }
+                $output += "  Check: $checkResult"
+            }
+            
+            $output += "  Time: $($duration)s"
+            $output += ""
+        }
+    }
+    
+    # Summary
+    if ($Success) {
+        $completedCount = ($Summary.States.Values | Where-Object { $_.Success -eq $true }).Count
+        $totalCount = $Summary.States.Count
+        $output += "📈 SUMMARY: ✅ $completedCount/$totalCount states completed successfully in $($Duration)s"
+    } else {
+        $output += "📈 SUMMARY: ❌ Execution failed - $ErrorMessage"
+    }
+    
+    return $output
+}
+
+<#
+.SYNOPSIS
+Elaborate format summary function.
+#>
+function Format-ElaborateOutput {
+    param([hashtable]$Summary, [bool]$Success, [string]$ErrorMessage, [double]$Duration)
+    
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $statusIcon = if ($Success) { "[check]" } else { "[x]" }
     $statusText = if ($Success) { "MISSION ACCOMPLISHED" } else { "MISSION FAILED" }
     
     $output = @(

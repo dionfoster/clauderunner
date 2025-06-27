@@ -8,6 +8,7 @@ Import-Module "$PSScriptRoot\OutputFormatters.psm1"
 # Module variables for output formatting
 $script:CurrentOutputFormat = "Default"
 $script:RealtimeFormatters = $null
+$script:TargetState = $null
 
 <#
 .SYNOPSIS
@@ -33,6 +34,22 @@ function Set-OutputFormat {
 
 <#
 .SYNOPSIS
+Sets the target state name for summary output.
+
+.PARAMETER TargetState
+The name of the target state being executed.
+#>
+function Set-TargetState {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$TargetState
+    )
+    
+    $script:TargetState = $TargetState
+}
+
+<#
+.SYNOPSIS
 Begins state transitions visualization.
 
 .DESCRIPTION
@@ -49,12 +66,16 @@ function Start-StateTransitions {
     
     # Use the appropriate formatter for the header
     $header = & $script:RealtimeFormatters.StateTransitionsHeader
-    if ($header -is [array]) {
-        foreach ($line in $header) {
-            Write-Log -Level "SYSTEM" $line
+    if ($null -ne $header -and $header -ne "" -and $header.Count -gt 0) {
+        if ($header -is [array]) {
+            foreach ($line in $header) {
+                if ($null -ne $line -and $line -ne "") {
+                    Write-Log -Level "SYSTEM" $line
+                }
+            }
+        } else {
+            Write-Log -Level "SYSTEM" $header
         }
-    } else {
-        Write-Log -Level "SYSTEM" $header
     }
 }
 
@@ -91,12 +112,16 @@ function Start-StateProcessing {
     
     # Use the appropriate formatter for state start
     $output = & $script:RealtimeFormatters.StateStart -StateName $StateName -StateIcon $stateIcon -Dependencies $Dependencies
-    if ($output -is [array]) {
-        foreach ($line in $output) {
-            Write-Log -Level "SYSTEM" $line
+    if ($output) {
+        if ($output -is [array]) {
+            foreach ($line in $output) {
+                if ($line) {
+                    Write-Log -Level "SYSTEM" $line
+                }
+            }
+        } else {
+            Write-Log -Level "SYSTEM" $output
         }
-    } else {
-        Write-Log -Level "SYSTEM" $output
     }
 }
 
@@ -123,12 +148,16 @@ function Write-StateCheck {
     
     # Use the appropriate formatter for state check
     $output = & $script:RealtimeFormatters.StateCheck -CheckType $CheckType -CheckDetails $CheckDetails
-    if ($output -is [array]) {
-        foreach ($line in $output) {
-            Write-Log -Level "SYSTEM" $line
+    if ($output) {
+        if ($output -is [array]) {
+            foreach ($line in $output) {
+                if ($line) {
+                    Write-Log -Level "SYSTEM" $line
+                }
+            }
+        } else {
+            Write-Log -Level "SYSTEM" $output
         }
-    } else {
-        Write-Log -Level "SYSTEM" $output
     }
 }
 
@@ -169,12 +198,16 @@ function Write-StateCheckResult {
     
     # Use the appropriate formatter for state check result
     $output = & $script:RealtimeFormatters.StateCheckResult -IsReady $IsReady -CheckType $CheckType -AdditionalInfo $AdditionalInfo
-    if ($output -is [array]) {
-        foreach ($line in $output) {
-            Write-Log -Level "SYSTEM" $line
+    if ($output) {
+        if ($output -is [array]) {
+            foreach ($line in $output) {
+                if ($line) {
+                    Write-Log -Level "SYSTEM" $line
+                }
+            }
+        } else {
+            Write-Log -Level "SYSTEM" $output
         }
-    } else {
-        Write-Log -Level "SYSTEM" $output
     }
 }
 
@@ -230,12 +263,16 @@ function Start-StateAction {
     
     # Use the appropriate formatter for state action start
     $output = & $script:RealtimeFormatters.StateActionStart -ActionType $ActionType -Description $Description -ActionCommand $ActionCommand
-    if ($output -is [array]) {
-        foreach ($line in $output) {
-            Write-Log -Level "SYSTEM" $line
+    if ($output) {
+        if ($output -is [array]) {
+            foreach ($line in $output) {
+                if ($line) {
+                    Write-Log -Level "SYSTEM" $line
+                }
+            }
+        } else {
+            Write-Log -Level "SYSTEM" $output
         }
-    } else {
-        Write-Log -Level "SYSTEM" $output
     }
     
     return $actionId
@@ -282,12 +319,16 @@ function Complete-StateAction {
     
     # Use the appropriate formatter for state action complete
     $output = & $script:RealtimeFormatters.StateActionComplete -Success $Success -ErrorMessage $ErrorMessage -Duration $duration
-    if ($output -is [array]) {
-        foreach ($line in $output) {
-            Write-Log -Level "SYSTEM" $line
+    if ($output) {
+        if ($output -is [array]) {
+            foreach ($line in $output) {
+                if ($line) {
+                    Write-Log -Level "SYSTEM" $line
+                }
+            }
+        } else {
+            Write-Log -Level "SYSTEM" $output
         }
-    } else {
-        Write-Log -Level "SYSTEM" $output
     }
 }
 
@@ -336,12 +377,16 @@ function Complete-State {
     
     # Use the appropriate formatter for state complete
     $output = & $script:RealtimeFormatters.StateComplete -Success $Success -ErrorMessage $ErrorMessage -Duration $duration -StateName $StateName
-    if ($output -is [array]) {
-        foreach ($line in $output) {
-            Write-Log -Level "SYSTEM" $line
+    if ($output) {
+        if ($output -is [array]) {
+            foreach ($line in $output) {
+                if ($line) {
+                    Write-Log -Level "SYSTEM" $line
+                }
+            }
+        } else {
+            Write-Log -Level "SYSTEM" $output
         }
-    } else {
-        Write-Log -Level "SYSTEM" $output
     }
 }
 
@@ -405,12 +450,39 @@ function Write-StateSummary {
         Write-Log -Level "SYSTEM" "✅ Success: $successCount/$totalCount tasks completed"
         Write-Log -Level "SYSTEM" "⏱️ Total time: $($totalDuration)s"
     } else {
-        # For other formats, show a minimal summary since real-time output is comprehensive
+        # For other formats, use the format-specific summary functions
         if ($null -ne $summary.TotalStartTime) {
             $totalDuration = [math]::Round($summary.TotalDuration.TotalSeconds, 1)
-            Write-Log -Level "SYSTEM" " "
-            Write-Log -Level "SYSTEM" "==============================================================================="
-            Write-Log -Level "SYSTEM" "Total execution time: ${totalDuration} seconds"
+            $success = ($summary.States.Values | Where-Object { $_.Success -eq $false }).Count -eq 0
+            $errorMessage = ""
+            
+            # Add target state information to summary for Simple format
+            $summary.TargetState = $script:TargetState
+            
+            # Get the output formatter for the current format
+            $formatter = OutputFormatters\Get-OutputFormatter -FormatName $script:CurrentOutputFormat
+            if ($formatter) {
+                $formattedOutput = & $formatter -Summary $summary -Success $success -ErrorMessage $errorMessage -Duration $totalDuration
+                if ($formattedOutput -and $formattedOutput.Count -gt 0) {
+                    foreach ($line in $formattedOutput) {
+                        if ($line -and $line.Trim() -ne "") {
+                            Write-Log -Level "SYSTEM" $line
+                        } elseif ($line -eq " ") {
+                            Write-Log -Level "SYSTEM" " "
+                        }
+                    }
+                } else {
+                    # Fallback to basic summary
+                    Write-Log -Level "SYSTEM" " "
+                    Write-Log -Level "SYSTEM" "==============================================================================="
+                    Write-Log -Level "SYSTEM" "Total execution time: ${totalDuration} seconds"
+                }
+            } else {
+                # Fallback to basic summary
+                Write-Log -Level "SYSTEM" " "
+                Write-Log -Level "SYSTEM" "==============================================================================="
+                Write-Log -Level "SYSTEM" "Total execution time: ${totalDuration} seconds"
+            }
         }
     }
 
@@ -463,4 +535,4 @@ function Get-StatusIcon {
 Export-ModuleMember -Function Start-StateTransitions, Start-StateProcessing, 
     Write-StateCheck, Write-StateCheckResult, Start-StateActions, Start-StateAction,
     Complete-StateAction, Complete-State, Write-StateSummary, Get-StatusIcon, 
-    Get-StateSummaryForFormatters, Set-OutputFormat
+    Get-StateSummaryForFormatters, Set-OutputFormat, Set-TargetState

@@ -200,18 +200,24 @@ function Invoke-State {
 
 # Main execution
 try {
-    Write-Log "▶️ Claude Task Runner (Target: $Target)" "SYSTEM"
-    Write-Log "📋 Configuration loaded from $script:ConfigPath" "SYSTEM"
-    Write-Log " " "SYSTEM"
-    
     Configuration\Initialize-Environment
     $config = Get-Configuration
     
     # Get the final output format (parameter takes precedence over config)
     $finalOutputFormat = Configuration\Get-OutputFormat -Config $config -ParameterFormat $OutputFormat
     
+    # For Simple and Medium formats, suppress the header lines as they're included in the summary
+    if ($finalOutputFormat -notin @("Simple", "Medium")) {
+        Write-Log "▶️ Claude Task Runner (Target: $Target)" "SYSTEM"
+        Write-Log "📋 Configuration loaded from $script:ConfigPath" "SYSTEM"
+        Write-Log " " "SYSTEM"
+    }
+    
     # Set the output format for all state visualization
     StateVisualization\Set-OutputFormat -OutputFormat $finalOutputFormat
+    
+    # Set the target state for summary output
+    StateVisualization\Set-TargetState -TargetState $Target
     
     # Track processed states for this run only
     $processedStates = New-Object System.Collections.Generic.HashSet[string]
