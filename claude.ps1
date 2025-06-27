@@ -2,7 +2,9 @@
 param(
     [ValidateNotNullOrEmpty()]
     [string]$Target = "apiReady",
-    [switch]$Verbose
+    [switch]$Verbose,
+    [ValidateSet("Default", "Simple", "Medium", "Elaborate")]
+    [string]$OutputFormat = "Default"
 )
 
 $script:ConfigPath = "claude.yml"
@@ -15,6 +17,7 @@ Import-Module (Join-Path $modulesPath "Configuration.psm1") -Force
 Import-Module (Join-Path $modulesPath "CommandExecution.psm1") -Force
 Import-Module (Join-Path $modulesPath "ReadinessChecks.psm1") -Force
 Import-Module (Join-Path $modulesPath "StateVisualization.psm1") -Force
+Import-Module (Join-Path $modulesPath "OutputFormatters.psm1") -Force
 
 # Set the log path in the logging module
 Set-LogPath -Path $script:LogPath
@@ -199,18 +202,25 @@ function Invoke-State {
 try {
     Write-Log "▶️ Claude Task Runner (Target: $Target)" "SYSTEM"
     Write-Log "📋 Configuration loaded from $script:ConfigPath" "SYSTEM"
+    Write-Log " " "SYSTEM"
     
     Configuration\Initialize-Environment
     $config = Get-Configuration
+    
+    # Get the final output format (parameter takes precedence over config)
+    $finalOutputFormat = Configuration\Get-OutputFormat -Config $config -ParameterFormat $OutputFormat
+    
+    # Set the output format for all state visualization
+    StateVisualization\Set-OutputFormat -OutputFormat $finalOutputFormat
     
     # Track processed states for this run only
     $processedStates = New-Object System.Collections.Generic.HashSet[string]
     $success = Invoke-State -StateName $Target -Config $config -ProcessedStates $processedStates
     
+    # Write the unified summary (format-aware)
     StateVisualization\Write-StateSummary
     
     if ($success) {
-        Write-Log "🎉 Task runner completed successfully!" "SUCCESS"
         exit 0
     }
     else {

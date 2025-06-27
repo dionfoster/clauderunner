@@ -126,5 +126,54 @@ function Test-StateConfiguration {
     }
 }
 
+<#
+.SYNOPSIS
+Gets the output format from configuration with validation and fallback.
+
+.DESCRIPTION
+Retrieves the outputFormat setting from the configuration, validates it,
+and provides fallback to the parameter or default value.
+
+.PARAMETER Config
+The configuration hashtable.
+
+.PARAMETER ParameterFormat
+The format specified via command line parameter.
+
+.OUTPUTS
+Returns a validated output format name.
+#>
+function Get-OutputFormat {
+    param(
+        [hashtable]$Config,
+        [string]$ParameterFormat = "Default"
+    )
+    
+    $validFormats = @("Default", "Simple", "Medium", "Elaborate")
+    
+    # Check if configuration has outputFormat setting
+    $configFormat = $null
+    if ($Config -and $Config.outputFormat) {
+        $configFormat = $Config.outputFormat
+    }
+    
+    # Parameter takes precedence over config file
+    $selectedFormat = if ($ParameterFormat -ne "Default") { 
+        $ParameterFormat 
+    } elseif ($configFormat) { 
+        $configFormat 
+    } else { 
+        "Default" 
+    }
+    
+    # Validate the format
+    if ($selectedFormat -notin $validFormats) {
+        Write-Log "Invalid output format '$selectedFormat'. Using Default format. Valid formats: $($validFormats -join ', ')" "WARNING"
+        return "Default"
+    }
+    
+    return $selectedFormat
+}
+
 # Export the functions
-Export-ModuleMember -Function Initialize-Environment, Get-Configuration, Test-StateConfiguration, Set-ConfigPath
+Export-ModuleMember -Function Initialize-Environment, Get-Configuration, Test-StateConfiguration, Set-ConfigPath, Get-OutputFormat, Get-OutputFormat

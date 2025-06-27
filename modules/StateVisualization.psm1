@@ -3,6 +3,33 @@
 # Import dependencies
 Import-Module "$PSScriptRoot\StateManagement.psm1" -Prefix "SM"
 Import-Module "$PSScriptRoot\Logging.psm1"
+Import-Module "$PSScriptRoot\OutputFormatters.psm1"
+
+# Module variables for output formatting
+$script:CurrentOutputFormat = "Default"
+$script:RealtimeFormatters = $null
+
+<#
+.SYNOPSIS
+Sets the output format for all state visualization functions.
+
+.DESCRIPTION
+Configures the output format to be used for real-time state visualization.
+This affects all subsequent calls to state visualization functions.
+
+.PARAMETER OutputFormat
+The output format to use: Default, Simple, Medium, or Elaborate.
+#>
+function Set-OutputFormat {
+    param(
+        [Parameter(Mandatory=$true)]
+        [ValidateSet("Default", "Simple", "Medium", "Elaborate")]
+        [string]$OutputFormat
+    )
+    
+    $script:CurrentOutputFormat = $OutputFormat
+    $script:RealtimeFormatters = Get-RealtimeFormatters -FormatName $OutputFormat
+}
 
 <#
 .SYNOPSIS
@@ -12,9 +39,23 @@ Begins state transitions visualization.
 Initializes the state machine visualization and writes the header.
 #>
 function Start-StateTransitions {
+    # Initialize default formatters if not set
+    if ($null -eq $script:RealtimeFormatters) {
+        Set-OutputFormat -OutputFormat $script:CurrentOutputFormat
+    }
+    
     # Start tracking in state management
     Start-SMStateTransitions
-    Write-Log -Level "SYSTEM" "STATE TRANSITIONS:"
+    
+    # Use the appropriate formatter for the header
+    $header = & $script:RealtimeFormatters.StateTransitionsHeader
+    if ($header -is [array]) {
+        foreach ($line in $header) {
+            Write-Log -Level "SYSTEM" $line
+        }
+    } else {
+        Write-Log -Level "SYSTEM" $header
+    }
 }
 
 <#
@@ -48,16 +89,15 @@ function Start-StateProcessing {
     
     $stateIcon = Get-SMStateIcon -StateName $StateName
     
-    # Format dependencies with check marks
-    $formattedDeps = $Dependencies | ForEach-Object { "$_ ✓" }
-    $depText = if ($Dependencies.Count -gt 0) { 
-        "Dependencies: $($formattedDeps -join ', ')" 
-    } else { 
-        "Dependencies: none" 
+    # Use the appropriate formatter for state start
+    $output = & $script:RealtimeFormatters.StateStart -StateName $StateName -StateIcon $stateIcon -Dependencies $Dependencies
+    if ($output -is [array]) {
+        foreach ($line in $output) {
+            Write-Log -Level "SYSTEM" $line
+        }
+    } else {
+        Write-Log -Level "SYSTEM" $output
     }
-    
-    Write-Log -Level "SYSTEM" "┌─ STATE: $(Get-StatusIcon 'Processing') $stateIcon$StateName"
-    Write-Log -Level "SYSTEM" "│  ├─ $depText"
 }
 
 <#
@@ -81,7 +121,15 @@ function Write-StateCheck {
         [string]$CheckDetails
     )
     
-    Write-Log -Level "SYSTEM" "│  ├─ Check: $(Get-StatusIcon 'Checking') $CheckType check ($CheckDetails)"
+    # Use the appropriate formatter for state check
+    $output = & $script:RealtimeFormatters.StateCheck -CheckType $CheckType -CheckDetails $CheckDetails
+    if ($output -is [array]) {
+        foreach ($line in $output) {
+            Write-Log -Level "SYSTEM" $line
+        }
+    } else {
+        Write-Log -Level "SYSTEM" $output
+    }
 }
 
 <#
@@ -114,26 +162,20 @@ function Write-StateCheckResult {
         # Mark the current state as completed since it's already ready
         $result = "Already ready via $CheckType check"
         Set-SMStateStatus -Status "Completed" -Result $result
-        
-        # Format log message based on whether additional info was provided
-        if ($AdditionalInfo) {
-            $logMessage = "│  └─ Status: $(Get-StatusIcon 'Ready') Ready - $CheckType ($AdditionalInfo)"
-        } else {
-            $logMessage = "│  └─ Result: $(Get-StatusIcon 'Ready') READY (already ready via $($CheckType.ToLower()) check)"
-        }    } else {
+    } else {
         # Keep state in processing since we'll need to run actions
         Set-SMStateStatus -Status "Processing"
-        
-        # Format log message based on whether additional info was provided
-        # Use Status format only for specific status information, otherwise use Result format
-        if ($AdditionalInfo -and ($AdditionalInfo -like "*Status:*" -or $AdditionalInfo -notlike "*retry*")) {
-            $logMessage = "│  └─ Status: $(Get-StatusIcon 'NotReady') Not Ready - $CheckType ($AdditionalInfo)"
-        } else {
-            $logMessage = "│  └─ Result: $(Get-StatusIcon 'NotReady') NOT READY (proceeding with actions)"
-        }
     }
     
-    Write-Log -Level "SYSTEM" $logMessage
+    # Use the appropriate formatter for state check result
+    $output = & $script:RealtimeFormatters.StateCheckResult -IsReady $IsReady -CheckType $CheckType -AdditionalInfo $AdditionalInfo
+    if ($output -is [array]) {
+        foreach ($line in $output) {
+            Write-Log -Level "SYSTEM" $line
+        }
+    } else {
+        Write-Log -Level "SYSTEM" $output
+    }
 }
 
 <#
@@ -144,7 +186,17 @@ Begins action execution visualization.
 Logs that actions are being executed.
 #>
 function Start-StateActions {
-    Write-Log -Level "SYSTEM" "│  ├─ Actions:"
+    # Use the appropriate formatter for state actions header
+    $output = & $script:RealtimeFormatters.StateActionsHeader
+    if ($output -and $output -ne "") {
+        if ($output -is [array]) {
+            foreach ($line in $output) {
+                Write-Log -Level "SYSTEM" $line
+            }
+        } else {
+            Write-Log -Level "SYSTEM" $output
+        }
+    }
 }
 
 <#
@@ -176,13 +228,15 @@ function Start-StateAction {
     
     $actionId = Register-SMStateAction -StateName $StateName -ActionType $ActionType -ActionCommand $ActionCommand -Description $Description
     
-    $message = "│  │  ├─ $(Get-StatusIcon 'Executing') $ActionType"
-    if ($Description) {
-        $message += ": $Description"
+    # Use the appropriate formatter for state action start
+    $output = & $script:RealtimeFormatters.StateActionStart -ActionType $ActionType -Description $Description -ActionCommand $ActionCommand
+    if ($output -is [array]) {
+        foreach ($line in $output) {
+            Write-Log -Level "SYSTEM" $line
+        }
+    } else {
+        Write-Log -Level "SYSTEM" $output
     }
-    $message += " ($ActionCommand)"
-    
-    Write-Log -Level "SYSTEM" $message
     
     return $actionId
 }
@@ -216,26 +270,25 @@ function Complete-StateAction {
     
     # Complete action in state management
     Complete-SMStateAction -StateName $StateName -ActionId $ActionId -Success $Success -ErrorMessage $ErrorMessage
-      # Get the action to retrieve duration
+    
+    # Get the action to retrieve duration
     $summary = Get-SMStateSummary
     $action = $summary.States[$StateName].Actions | Where-Object { $_.Id -eq $ActionId }
     
-    $statusIcon = if ($Success) { "$(Get-StatusIcon 'Success')" } else { "$(Get-StatusIcon 'Error')" }
-    $statusText = if ($Success) { "SUCCESS" } else { "FAILED" }
-    
-    $message = "│  │  └─ Status: $statusIcon $statusText"
-    
-    # Add duration if available
+    $duration = 0
     if ($action -and $action.Duration) {
         $duration = [math]::Round($action.Duration.TotalSeconds, 1)
-        $message += " ($($duration)s)"
     }
     
-    if (-not $Success -and $ErrorMessage) {
-        $message += " Error: $ErrorMessage"
+    # Use the appropriate formatter for state action complete
+    $output = & $script:RealtimeFormatters.StateActionComplete -Success $Success -ErrorMessage $ErrorMessage -Duration $duration
+    if ($output -is [array]) {
+        foreach ($line in $output) {
+            Write-Log -Level "SYSTEM" $line
+        }
+    } else {
+        Write-Log -Level "SYSTEM" $output
     }
-    
-    Write-Log -Level "SYSTEM" $message
 }
 
 <#
@@ -261,18 +314,34 @@ function Complete-State {
         [Parameter(Mandatory=$true)]
         [bool]$Success,
         [string]$ErrorMessage = ""
-    )    # Complete state in state management
+    )
+    
+    # Check if the state is already completed to avoid duplicate output
+    $summary = Get-SMStateSummary
+    $existingState = $summary.States[$StateName]
+    
+    # If state is already marked as completed (from Write-StateCheckResult), don't output again
+    if ($existingState -and $existingState.Status -eq "Completed") {
+        # Just update the duration in state management without outputting anything
+        Complete-SMState -StateName $StateName -Success $Success -ErrorMessage $ErrorMessage
+        return
+    }
+    
+    # Complete state in state management
     Complete-SMState -StateName $StateName -Success $Success -ErrorMessage $ErrorMessage
     
-    $summary = Get-SMStateSummary
-    $state = $summary.States[$StateName]
+    $updatedSummary = Get-SMStateSummary
+    $state = $updatedSummary.States[$StateName]
     $duration = [math]::Round(($state.Duration.TotalSeconds), 1)
-    $status = if ($Success) { "$(Get-StatusIcon 'Completed') COMPLETED" } else { "$(Get-StatusIcon 'Failed') FAILED" }
     
-    Write-Log -Level "SYSTEM" "│  └─ Result: $status ($($duration)s)"
-    
-    if (-not $Success -and $ErrorMessage) {
-        Write-Log -Level "SYSTEM" "│     └─ Error: $ErrorMessage"
+    # Use the appropriate formatter for state complete
+    $output = & $script:RealtimeFormatters.StateComplete -Success $Success -ErrorMessage $ErrorMessage -Duration $duration -StateName $StateName
+    if ($output -is [array]) {
+        foreach ($line in $output) {
+            Write-Log -Level "SYSTEM" $line
+        }
+    } else {
+        Write-Log -Level "SYSTEM" $output
     }
 }
 
@@ -281,63 +350,100 @@ function Complete-State {
 Writes a summary of state processing.
 
 .DESCRIPTION
-Logs a summary of all states processed.
+Logs a summary of all states processed. For Default format, provides the traditional
+summary output. For other formats, the real-time output already provides comprehensive
+information, so only a minimal summary is shown.
 #>
 function Write-StateSummary {
     $summary = Get-SMStateSummary
     
-    Write-Log -Level "SYSTEM" " "
-    Write-Log -Level "SYSTEM" "EXECUTION SUMMARY"
-    Write-Log -Level "SYSTEM" "----------------"
-    
-    # Check if TotalStartTime is null to avoid errors
-    if ($null -eq $summary.TotalStartTime) {
-        Write-Log -Level "SYSTEM" "No state transitions recorded."
-        return
-    }
-    
-    $totalDuration = [math]::Round($summary.TotalDuration.TotalSeconds, 1)
-    
-    # Check if we have any states
-    if ($summary.States.Count -gt 0) {
-        # Sort states by their start time (execution order)
-        $sortedStates = $summary.States.GetEnumerator() | Sort-Object { $summary.StateStartTimes[$_.Key] }
+    # For Default format, show the traditional summary
+    if ($script:CurrentOutputFormat -eq "Default") {
+        Write-Log -Level "SYSTEM" " "
+        Write-Log -Level "SYSTEM" " "
+        Write-Log -Level "SYSTEM" "EXECUTION SUMMARY"
+        Write-Log -Level "SYSTEM" "----------------"
         
-        foreach ($state in $sortedStates) {
-            $status = if ($state.Value.Success) { "$(Get-StatusIcon 'Success')" } else { "$(Get-StatusIcon 'Error')" }
-            
-            # Handle potential null Duration
-            $duration = 0
-            if ($null -ne $state.Value.Duration) {
-                $duration = [math]::Round($state.Value.Duration.TotalSeconds, 1)
-            }
-            
-            Write-Log -Level "SYSTEM" "$status $($state.Key) ($($duration)s)"
-            
-            if (-not $state.Value.Success -and $state.Value.ErrorMessage) {
-                Write-Log -Level "SYSTEM" "   └─ Error: $($state.Value.ErrorMessage)"
-            }
+        # Check if TotalStartTime is null to avoid errors
+        if ($null -eq $summary.TotalStartTime) {
+            Write-Log -Level "SYSTEM" "No state transitions recorded."
+            return
         }
+        
+        $totalDuration = [math]::Round($summary.TotalDuration.TotalSeconds, 1)
+        
+        # Check if we have any states
+        if ($summary.States.Count -gt 0) {
+            # Sort states by their start time (execution order)
+            $sortedStates = $summary.States.GetEnumerator() | Sort-Object { $summary.StateStartTimes[$_.Key] }
+            
+            foreach ($state in $sortedStates) {
+                $status = if ($state.Value.Success) { "$(Get-StatusIcon 'Success')" } else { "$(Get-StatusIcon 'Error')" }
+                
+                # Handle potential null Duration
+                $duration = 0
+                if ($null -ne $state.Value.Duration) {
+                    $duration = [math]::Round($state.Value.Duration.TotalSeconds, 1)
+                }
+                
+                Write-Log -Level "SYSTEM" "$status $($state.Key) ($($duration)s)"
+                
+                if (-not $state.Value.Success -and $state.Value.ErrorMessage) {
+                    Write-Log -Level "SYSTEM" "   └─ Error: $($state.Value.ErrorMessage)"
+                }
+            }
+        } else {
+            Write-Log -Level "SYSTEM" "No states processed."
+        }
+        
+        Write-Log -Level "SYSTEM" " "
+        
+        # Count successful and total states
+        $successCount = ($summary.States.Values | Where-Object { $_.Success -eq $true }).Count
+        $totalCount = $summary.States.Count
+        
+        Write-Log -Level "SYSTEM" "✅ Success: $successCount/$totalCount tasks completed"
+        Write-Log -Level "SYSTEM" "⏱️ Total time: $($totalDuration)s"
     } else {
-        Write-Log -Level "SYSTEM" "No states processed."
+        # For other formats, show a minimal summary since real-time output is comprehensive
+        if ($null -ne $summary.TotalStartTime) {
+            $totalDuration = [math]::Round($summary.TotalDuration.TotalSeconds, 1)
+            Write-Log -Level "SYSTEM" " "
+            Write-Log -Level "SYSTEM" "==============================================================================="
+            Write-Log -Level "SYSTEM" "Total execution time: ${totalDuration} seconds"
+        }
     }
-    
-    Write-Log -Level "SYSTEM" " "    
-    Write-Log -Level "SYSTEM" " "
-    Write-Log -Level "SYSTEM" "Total time: $totalDuration seconds"    # Reset state machine variables after summary
+
+    # Reset state machine variables after summary
     Reset-SMStateMachineVariables
 }
 
+<#
+.SYNOPSIS
+Gets the current state summary for external use.
+
+.DESCRIPTION
+Provides access to the state summary data for output formatters.
+This wraps the internal Get-SMStateSummary function.
+
+.OUTPUTS
+Returns the state summary hashtable.
+#>
+function Get-StateSummaryForFormatters {
+    return Get-SMStateSummary
+}
+
 # Status indicators, keeping these here as they're visualization-specific
+# Using basic Unicode characters that work reliably in PowerShell
 $script:StatusIcons = @{
     "Processing"  = "🔄"
     "Completed"   = "✅"
     "Failed"      = "❌"
-    "Skipped"     = "⏭️"
+    "Skipped"     = "⏭"
     "Executing"   = "⏳"
     "Success"     = "✓"
     "Error"       = "✗"
-    "Warning"     = "⚠️"
+    "Warning"     = "⚠"
     "Checking"    = "🔍"
     "Ready"       = "✅"
     "NotReady"    = "❌"
@@ -356,4 +462,5 @@ function Get-StatusIcon {
 # Export module members
 Export-ModuleMember -Function Start-StateTransitions, Start-StateProcessing, 
     Write-StateCheck, Write-StateCheckResult, Start-StateActions, Start-StateAction,
-    Complete-StateAction, Complete-State, Write-StateSummary, Get-StatusIcon
+    Complete-StateAction, Complete-State, Write-StateSummary, Get-StatusIcon, 
+    Get-StateSummaryForFormatters, Set-OutputFormat
