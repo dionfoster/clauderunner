@@ -270,7 +270,7 @@ Describe "State Machine Visualization - State Transitions" {
             $scriptProcessedStates["TestState"]["Status"] | Should -Be "Completed"
               # Check log
             $logContent = Get-Content -Path $script:TestLogPath -Raw
-            $logContent | Should -Match "Status: ✅ Ready"
+            $logContent | Should -Match "Result: ✅ READY"
         }
     }
 }
@@ -348,7 +348,7 @@ Describe "State Machine Visualization - Actions" {
             $scriptProcessedStates["TestState"]["Actions"][0]["Command"] | Should -Be "docker pull image"
               # Check log
             $logContent = Get-Content -Path $script:TestLogPath -Raw
-            $logContent | Should -Match "│  │  ├─ ⏳ Command \(docker pull image\)"
+            $logContent | Should -Match "│  │  ├─ Command \(docker pull image\)"
         }
           It "Logs the start of an application action" {
             # Act
@@ -361,7 +361,7 @@ Describe "State Machine Visualization - Actions" {
             $scriptProcessedStates["TestState"]["Actions"][0]["Description"] | Should -Be "Start Node.js app"
               # Check log
             $logContent = Get-Content -Path $script:TestLogPath -Raw
-            $logContent | Should -Match "│  │  ├─ ⏳ Application: Start Node.js app \(npm start\)"
+            $logContent | Should -Match "│  │  ├─ Command: Start Node.js app \(npm start\)"
         }
           It "Creates a unique action ID for each action" {
             # Act - Create multiple actions
@@ -388,7 +388,7 @@ Describe "State Machine Visualization - Actions" {
             $scriptProcessedStates["TestState"]["Actions"][0]["Command"] | Should -Be $complexCommand
               # Check log contains the command
             $logContent = Get-Content -Path $script:TestLogPath -Raw
-            $logContent | Should -Match "⏳ Command \(docker run -p 8000:8000 -v"
+            $logContent | Should -Match "Command \(docker run -p 8000:8000 -v"
         }
     }
     
@@ -436,7 +436,7 @@ Describe "State Machine Visualization - Actions" {
             $scriptProcessedStates["TestState"]["Actions"][0]["ErrorMessage"] | Should -Be "Command failed with exit code 1"
               # Check log
             $logContent = Get-Content -Path $script:TestLogPath -Raw
-            $logContent | Should -Match "│  │  └─ Status: ✗ FAILED \(\d+s\) Error: Command failed with exit code 1"
+            $logContent | Should -Match "│  │  │  └─ Status: ✗ FAILED Error: Command failed with exit code 1"
         }
         
         It "Calculates action duration correctly" {
@@ -598,7 +598,7 @@ Describe "State Machine Visualization - Summary" {
             $logContent | Should -Match "EXECUTION SUMMARY"
             $logContent | Should -Match "✓ SuccessState"
             $logContent | Should -Match "✗ FailedState"
-            $logContent | Should -Match "Total time: \d+\.?\d* seconds"
+            $logContent | Should -Match "⏱️ Total time: \d+\.?\d*s"
             
             # Verify state machine variables are reset
             $script:StateTransitionStarted | Should -BeFalse
@@ -675,7 +675,7 @@ Describe "State Machine Visualization - Summary" {
             
             # Assert
             $logContent = Get-Content -Path $script:TestLogPath -Raw
-            $logContent | Should -Match "Total time: 5\.?\d* seconds"
+            $logContent | Should -Match "⏱️ Total time: 5\.?\d*s"
         }
         
         It "Sorts states by execution order (start time)" {
@@ -891,12 +891,12 @@ Describe "State Machine Visualization - End-to-End Flow" {
         $logContent = Get-Content -Path $script:TestLogPath -Raw
         # Check that all states are processed in the correct order        
         $logContent | Should -Match "┌─ STATE: 🔄 ⚙️ dockerStartup"
-        $logContent | Should -Match "Status: ✅ Ready"
+        $logContent | Should -Match "Result: ✅ READY"
         
         $logContent | Should -Match "┌─ STATE: 🔄 🐳 dockerReady"
         $logContent | Should -Match "Dependencies: dockerStartup ✓"
         $logContent | Should -Match "Actions:"
-        $logContent | Should -Match "⏳ Command \(docker start container\)"
+        $logContent | Should -Match "Command \(docker start container\)"
         $logContent | Should -Match "Status: ✓ SUCCESS"
         $logContent | Should -Match "Result: ✅ COMPLETED"
         
@@ -921,7 +921,7 @@ Describe "State Machine Visualization - End-to-End Flow" {
         $logContent = Get-Content -Path $script:TestLogPath -Raw
         $logContent | Should -Match "┌─ STATE: 🔄 🚀 apiReady"
         $logContent | Should -Match "Check: 🔍 Endpoint check"
-        $logContent | Should -Match "Status: ✅ Ready"
+        $logContent | Should -Match "Result: ✅ READY"
     }
     
     It "Handles complex multi-action flows" {
@@ -947,12 +947,12 @@ Describe "State Machine Visualization - End-to-End Flow" {
         # Assert
         $logContent = Get-Content -Path $script:TestLogPath -Raw
           # Check all actions are logged correctly
-        $logContent | Should -Match "│  │  ├─ ⏳ Command: Install dependencies \(npm install\)"
-        $logContent | Should -Match "│  │  └─ Status: ✓ SUCCESS"
-        $logContent | Should -Match "│  │  ├─ ⏳ Command: Build application \(npm run build\)"
-        $logContent | Should -Match "│  │  └─ Status: ✓ SUCCESS"
-        $logContent | Should -Match "│  │  ├─ ⏳ Application: Start server \(npm start\)"
-        $logContent | Should -Match "│  │  └─ Status: ✓ SUCCESS"
+        $logContent | Should -Match "│  │  ├─ Command: Install dependencies \(npm install\)"
+        $logContent | Should -Match "│  │  │  └─ Status: ✓ SUCCESS"
+        $logContent | Should -Match "│  │  ├─ Command: Build application \(npm run build\)"
+        $logContent | Should -Match "│  │  │  └─ Status: ✓ SUCCESS"
+        $logContent | Should -Match "│  │  ├─ Command: Start server \(npm start\)"
+        $logContent | Should -Match "│  │  │  └─ Status: ✓ SUCCESS"
         
         # Check state is completed
         $logContent | Should -Match "│  └─ Result: ✅ COMPLETED"

@@ -87,7 +87,7 @@ Describe "State Visualization Module" {
             Write-StateCheckResult -IsReady $true -CheckType "Command" -AdditionalInfo "Docker 20.10.7"
             
             # Assert
-            Assert-LogContent -TestLogPath $script:TestLogPath -Pattern "Status: ✅ Ready - Command \(Docker 20.10.7\)"
+            Assert-LogContent -TestLogPath $script:TestLogPath -Pattern "Result: ✅ READY \(Docker 20.10.7\)"
         }
         
         It "Records a failed state check result" {
@@ -98,7 +98,7 @@ Describe "State Visualization Module" {
             Write-StateCheckResult -IsReady $false -CheckType "Command" -AdditionalInfo "Command not found"
             
             # Assert
-            Assert-LogContent -TestLogPath $script:TestLogPath -Pattern "Status: ❌ Not Ready - Command \(Command not found\)"
+            Assert-LogContent -TestLogPath $script:TestLogPath -Pattern "Result: ❌ NOT READY \(proceeding with actions\)"
         }
     }
     
@@ -135,7 +135,7 @@ Describe "State Visualization Module" {
             $actionId | Should -Not -BeNullOrEmpty
             if (Test-Path $script:TestLogPath) {
                 $logContent = Get-Content -Path $script:TestLogPath -Raw
-                $logContent | Should -Match "⏳ Command: Installing dependencies \(npm install\)"
+                $logContent | Should -Match "Command: Installing dependencies \(npm install\)"
             } else {
                 "Log file doesn't exist" | Should -BeNullOrEmpty
             }

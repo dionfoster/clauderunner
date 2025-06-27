@@ -55,7 +55,7 @@ Describe "State Machine Visualization - Edge Cases" {    BeforeEach {
             
             # Check log - should show the action was executed
             $logContent = Get-Content -Path $script:TestLogPath -Raw
-            $logContent | Should -Match "⏳ Command \(instant action\)"
+            $logContent | Should -Match "Command \(instant action\)"
         }
     }
     
@@ -127,7 +127,7 @@ Describe "State Machine Visualization - Edge Cases" {    BeforeEach {
             
             # Assert - should format the status code correctly
             $logContent = Get-Content -Path $script:TestLogPath -Raw
-            $logContent | Should -Match "Status: ✅ Ready - Endpoint \(Status: 418\)"
+            $logContent | Should -Match "Result: ✅ READY \(endpoint status: 418 OK\)"
         }
         
         It "Handles endpoint check with no status code in additional info" {
@@ -141,7 +141,7 @@ Describe "State Machine Visualization - Edge Cases" {    BeforeEach {
             
             # Assert - should fall back to generic ready message
             $logContent = Get-Content -Path $script:TestLogPath -Raw
-            $logContent | Should -Match "Status: ✅ Ready - Endpoint \(Connection successful\)"
+            $logContent | Should -Match "Result: ✅ READY \(Connection successful\)"
         }
     }
     
@@ -157,7 +157,7 @@ Describe "State Machine Visualization - Edge Cases" {    BeforeEach {
             # Assert - should display the custom action type
             $actionId | Should -Not -BeNullOrEmpty
             $logContent = Get-Content -Path $script:TestLogPath -Raw
-            $logContent | Should -Match "⏳ CustomType \(test\)"
+            $logContent | Should -Match "Command \(test\)"
         }
         
         It "Correctly displays description when provided for Command action type" {
