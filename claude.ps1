@@ -4,10 +4,11 @@ param(
     [string]$Target = "apiReady",
     [switch]$Verbose,
     [ValidateSet("Default", "Simple", "Medium", "Elaborate")]
-    [string]$OutputFormat = "Default"
+    [string]$OutputFormat = "Default",
+    [string]$ConfigFile = "claude.yml"
 )
 
-$script:ConfigPath = "claude.yml"
+$script:ConfigPath = $ConfigFile
 $script:LogPath = "claude.log"
 
 # Import modules
@@ -218,6 +219,12 @@ try {
     
     # Set the target state for summary output
     StateVisualization\Set-TargetState -TargetState $Target
+    
+    # Start state transitions (shows header for Medium/Elaborate formats)
+    StateVisualization\Start-StateTransitions
+    
+    # Show execution flow for Medium format (after configuration is loaded)
+    StateVisualization\Show-ExecutionFlow -TargetStateName $Target -Config $config
     
     # Track processed states for this run only
     $processedStates = New-Object System.Collections.Generic.HashSet[string]

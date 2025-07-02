@@ -23,8 +23,13 @@
 ^ write after we have feedback from this check
 
 ▶ thirdState (depends: secondState)
-  Check: https://localhost:5001/healthcheck → ✅ 200 OK
-  Time: 3.6s
+  Check: docker info → ⏳ NOT READY
+  🚀 Executing actions...
+    ⏳ Command: Starting API
+    ✅ Completed
+    ⏳ Command: Polling endpoint: https://localhost:5001/healthcheck (max 10 tries, 3s interval, need 1 successes, timeout 30s)
+    ✅ Completed (7.7s)
+  Time: 11.9s
 ^ write after we have feedback from this check
 
 ▶ fourthState (depends: thirdState)

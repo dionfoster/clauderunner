@@ -15,7 +15,9 @@ $script:TargetState = $null
 Sets the output format for all state visualization functions.
 
 .DESCRIPTION
-Configures the output format to be used for real-time state visualization.
+Configures the output format to be used for real-    # Determine the execution order by recursively resolving dependencies
+    $script:tempExecutionOrder = @()
+    $visited = @{}e state visualization.
 This affects all subsequent calls to state visualization functions.
 
 .PARAMETER OutputFormat
@@ -65,7 +67,7 @@ function Start-StateTransitions {
     Start-SMStateTransitions
     
     # Use the appropriate formatter for the header
-    $header = & $script:RealtimeFormatters.StateTransitionsHeader
+    $header = & $script:RealtimeFormatters.StateTransitionsHeader -TargetState $script:TargetState
     if ($null -ne $header -and $header -ne "" -and $header.Count -gt 0) {
         if ($header -is [array]) {
             foreach ($line in $header) {
@@ -122,6 +124,13 @@ function Start-StateProcessing {
         } else {
             Write-Log -Level "SYSTEM" $output
         }
+    }
+    
+    # Show state details header on first state processing (for Medium format)
+    if (-not $script:ExecutionSectionsShown -and $script:CurrentOutputFormat -eq "Medium") {
+        Write-Log -Level "SYSTEM" "🔍 STATE DETAILS"
+        Write-Log -Level "SYSTEM" "────────────────"
+        $script:ExecutionSectionsShown = $true
     }
 }
 
@@ -361,9 +370,9 @@ function Complete-State {
     $summary = Get-SMStateSummary
     $existingState = $summary.States[$StateName]
     
-    # If state is already marked as completed (from Write-StateCheckResult), don't output again
-    if ($existingState -and $existingState.Status -eq "Completed") {
-        # Just update the duration in state management without outputting anything
+    # For Medium format, we always want to show the timing information even if state was already ready
+    if ($existingState -and $existingState.Status -eq "Completed" -and $script:CurrentOutputFormat -ne "Medium") {
+        # For non-Medium formats, don't output again if already completed from Write-StateCheckResult
         Complete-SMState -StateName $StateName -Success $Success -ErrorMessage $ErrorMessage
         return
     }
@@ -444,7 +453,7 @@ function Write-StateSummary {
         Write-Log -Level "SYSTEM" " "
         
         # Count successful and total states
-        $successCount = ($summary.States.Values | Where-Object { $_.Success -eq $true }).Count
+        $successCount = @($summary.States.Values | Where-Object { $_.Success -eq $true }).Count
         $totalCount = $summary.States.Count
         
         Write-Log -Level "SYSTEM" "✅ Success: $successCount/$totalCount tasks completed"
@@ -531,8 +540,104 @@ function Get-StatusIcon {
     return $script:StatusIcons[$Type]
 }
 
+<#
+.SYNOPSIS
+Shows the execution flow for Medium format after configuration parsing.
+
+.DESCRIPTION
+Determines and displays the execution order of states based on dependencies.
+This should be called after configuration is loaded but before state processing begins.
+
+.PARAMETER TargetStateName
+The name of the target state.
+
+.PARAMETER Config  
+The configuration object containing state definitions.
+#>
+function Show-ExecutionFlow {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$TargetStateName,
+        [Parameter(Mandatory=$true)]
+        [hashtable]$Config
+    )
+    
+    # Only show execution flow for Medium format
+    if ($script:CurrentOutputFormat -ne "Medium") {
+        return
+    }
+    
+    # Determine the execution order by recursively resolving dependencies
+    $executionOrder = @()
+    $visited = @{
+    }
+    
+    function Get-StateExecutionOrder {
+        param([string]$StateName)
+        
+        if ($visited.ContainsKey($StateName)) {
+            return
+        }
+        
+        $visited[$StateName] = $true
+        $stateConfig = $Config.states[$StateName]
+        
+        if ($stateConfig -and $stateConfig.needs) {
+            foreach ($dependency in $stateConfig.needs) {
+                Get-StateExecutionOrder -StateName $dependency
+            }
+        }
+        
+        $script:tempExecutionOrder = $script:tempExecutionOrder + $StateName
+    }
+    
+    # Determine execution order dynamically from configuration
+    $executionOrder = @()
+    
+    function Get-ExecutionOrder {
+        param([string]$StateName, [hashtable]$Visited = @{})
+        
+        if ($Visited[$StateName]) { 
+            return @()
+        }
+        $Visited[$StateName] = $true
+        
+        $order = @()
+        $stateConfig = $Config.states[$StateName]
+        if ($stateConfig -and $stateConfig.needs) {
+            foreach ($dep in $stateConfig.needs) {
+                $depOrder = Get-ExecutionOrder -StateName $dep -Visited $Visited
+                $order += $depOrder
+            }
+        }
+        $order += $StateName
+        return $order
+    }
+    
+    $executionOrder = Get-ExecutionOrder -StateName $TargetStateName
+    
+    # Display the execution flow section
+    Write-Log -Level "SYSTEM" " "
+    Write-Log -Level "SYSTEM" "📊 EXECUTION FLOW"
+    Write-Log -Level "SYSTEM" "─────────────────"
+    
+    # Create the flow line: [state1] ──→ [state2] ──→ [state3]
+    $flowParts = @()
+    foreach ($state in $executionOrder) {
+        $flowParts += "[$state]"
+    }
+    
+    if ($flowParts.Count -gt 0) {
+        $flowLine = $flowParts -join " ──→ "
+        Write-Log -Level "SYSTEM" $flowLine
+    } else {
+        Write-Log -Level "SYSTEM" "No states found"
+    }
+    Write-Log -Level "SYSTEM" " "
+}
+
 # Export module members
 Export-ModuleMember -Function Start-StateTransitions, Start-StateProcessing, 
     Write-StateCheck, Write-StateCheckResult, Start-StateActions, Start-StateAction,
     Complete-StateAction, Complete-State, Write-StateSummary, Get-StatusIcon, 
-    Get-StateSummaryForFormatters, Set-OutputFormat, Set-TargetState
+    Get-StateSummaryForFormatters, Set-OutputFormat, Set-TargetState, Show-ExecutionFlow, Show-ExecutionFlow

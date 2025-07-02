@@ -24,7 +24,9 @@ applyTo: '**'
 ## Bug Fixing
 - Focus on the root cause, not just symptoms
 - Do not introduce new bugs while fixing existing ones
-- Write tests for fixed bugs to prevent regressions
+- **ALWAYS write tests for fixed bugs to prevent regressions** - this is mandatory, not optional
+- Test the exact scenario that caused the bug, including edge cases
+- Ensure new tests fail before the fix and pass after the fix
 - If introducing a fix that changes the behavior of existing code, ask for confirmation before proceeding
 
 ## PowerShell Standards
@@ -85,4 +87,18 @@ applyTo: '**'
     - `AfterEach` should be on a new line
   - Use `BeforeAll` and `AfterAll` for setup and teardown
   - Use `Mock` to mock dependencies where appropriate
-  
+
+## Claude.ps1 Parameters
+The main script `claude.ps1` accepts the following parameters:
+- **Target** (string): The target state to execute (default: "apiReady")
+- **Verbose** (switch): Enable verbose output
+- **OutputFormat** (string): Output format - "Default", "Simple", "Medium", or "Elaborate" (default: "Default")
+- **ConfigFile** (string): Path to the configuration file (default: "claude.yml")
+
+**Example usage:**
+```powershell
+.\claude.ps1 -Target "myState" -OutputFormat Medium -Verbose
+.\claude.ps1 -ConfigFile "test-config.yml" -OutputFormat Medium
+```
+
+**Note:** The `-ConfigFile` parameter allows testing with different configuration files, useful for testing various scenarios.

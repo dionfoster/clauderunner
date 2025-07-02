@@ -155,36 +155,59 @@ function Write-StateComplete-Simple {
 
 # Medium format real-time functions
 function Write-StateTransitionsHeader-Medium {
+    param([string]$TargetState = "unknown")
+    
+    # Create the boxed header exactly like the template
+    $titleText = "🚀 Claude Task Runner"
+    $titlePadding = 78 - $titleText.Length
+    $titleLeftPad = [math]::Floor($titlePadding / 2)
+    $titleRightPad = $titlePadding - $titleLeftPad
+    $runnerLine = "║" + " " * $titleLeftPad + $titleText + " " * $titleRightPad + "║"
+    
+    $targetContent = "Target: $TargetState"
+    $targetPadding = 78 - $targetContent.Length
+    $targetLeftPad = [math]::Floor($targetPadding / 2)
+    $targetRightPad = $targetPadding - $targetLeftPad
+    $targetLine = "║" + " " * $targetLeftPad + $targetContent + " " * $targetRightPad + "║"
+    
     return @(
-        "📋 TASK EXECUTION",
-        "=================="
+        "╔══════════════════════════════════════════════════════════════════════════════╗",
+        $runnerLine,
+        $targetLine,
+        "╚══════════════════════════════════════════════════════════════════════════════╝"
     )
 }
 
 function Write-StateStart-Medium {
     param([string]$StateName, [string]$StateIcon, [string[]]$Dependencies)
     
-    $output = @("▶ Processing: $StateName $StateIcon")
-    if ($Dependencies.Count -gt 0) {
-        $depStatus = $Dependencies | ForEach-Object { "$_ ✓" }
-        $output += "  Prerequisites: $($depStatus -join ', ')"
+    # Format: ▶ stateName (depends: dep1, dep2) or just ▶ stateName if no dependencies
+    if ($Dependencies -and $Dependencies.Count -gt 0) {
+        return "▶ $StateName (depends: $($Dependencies -join ', '))"
+    } else {
+        return "▶ $StateName"
     }
-    return $output
 }
 
 function Write-StateCheck-Medium {
     param([string]$CheckType, [string]$CheckDetails)
-    return "  🔍 Checking: $CheckType → $CheckDetails"
+    # Don't show the checking line, we'll show the result in Write-StateCheckResult-Medium
+    return $null
 }
 
 function Write-StateCheckResult-Medium {
     param([bool]$IsReady, [string]$CheckType, [string]$AdditionalInfo)
     
     if ($IsReady) {
-        $info = if ($AdditionalInfo) { " ($AdditionalInfo)" } else { "" }
-        return "  ✅ Result: READY$info"
+        # Format like template: "Check: docker info → ✅ READY" or "Check: https://localhost:5001/healthcheck → ✅ 200 OK"
+        if ($CheckType -eq "Endpoint" -and $AdditionalInfo -like "*Status:*") {
+            $statusCode = $AdditionalInfo -replace ".*Status:\s*", ""
+            return "  Check: https://localhost:5001/healthcheck → ✅ $statusCode OK"
+        } else {
+            return "  Check: docker info → ✅ READY"
+        }
     } else {
-        return "  ⚠️ Result: Not ready, executing actions..."
+        return "  Check: docker info → ❌ NOT READY"
     }
 }
 
@@ -214,12 +237,8 @@ function Write-StateActionComplete-Medium {
 function Write-StateComplete-Medium {
     param([bool]$Success, [string]$ErrorMessage, [double]$Duration, [string]$StateName = "")
     
-    if ($Success) {
-        return "  ✅ $StateName completed (${Duration}s)"
-    } else {
-        $errorText = if ($ErrorMessage) { " - $ErrorMessage" } else { "" }
-        return "  ❌ $StateName failed (${Duration}s)$errorText"
-    }
+    # Always show time like the template: "Time: X.Xs"
+    return "  Time: $($Duration)s"
 }
 
 # Elaborate format real-time functions
@@ -410,8 +429,38 @@ Default format summary function - not currently implemented as DefaultFormat use
 #>
 function Format-DefaultOutput {
     param([hashtable]$Summary, [bool]$Success, [string]$ErrorMessage, [double]$Duration)
-    # Default format summary is handled by StateVisualization.psm1
-    return @()
+    
+    $output = @()
+    $output += " "
+    $output += " "
+    $output += "EXECUTION SUMMARY"
+    $output += "----------------"
+    
+    if ($Summary.States.Count -gt 0) {
+        # Use StateStartTimes if available, otherwise use State names in order
+        if ($Summary.StateStartTimes) {
+            $sortedStates = $Summary.States.GetEnumerator() | Sort-Object { $Summary.StateStartTimes[$_.Key] }
+        } else {
+            $sortedStates = $Summary.States.GetEnumerator()
+        }
+        
+        foreach ($state in $sortedStates) {
+            $status = if ($state.Value.Success) { "✓" } else { "✗" }
+            $stateDuration = if ($state.Value.Duration) { [math]::Round($state.Value.Duration.TotalSeconds, 1) } else { 0 }
+            $output += "$status $($state.Key) ($($stateDuration)s)"
+        }
+    }
+    
+    $output += " "
+    $completedCount = @($Summary.States.Values | Where-Object { $_.Success -eq $true }).Count
+    $totalCount = $Summary.States.Count
+    $output += "Completed: $completedCount/$totalCount states in $($Duration)s"
+    
+    if (-not $Success -and $ErrorMessage) {
+        $output += "Error: $ErrorMessage"
+    }
+    
+    return $output
 }
 
 <#
@@ -430,18 +479,23 @@ function Format-SimpleOutput {
     
     # States chain: state1 -> state2 -> state3
     if ($Summary.States.Count -gt 0) {
-        $stateNames = $Summary.StateStartTimes.GetEnumerator() | Sort-Object Value | ForEach-Object { $_.Key }
+        # Use StateStartTimes if available, otherwise use State names in order
+        if ($Summary.StateStartTimes) {
+            $stateNames = $Summary.StateStartTimes.GetEnumerator() | Sort-Object Value | ForEach-Object { $_.Key }
+        } else {
+            $stateNames = $Summary.States.Keys
+        }
         $output += "States: $($stateNames -join ' -> ')"
         $output += " "
         
         # Individual state summaries
         foreach ($stateName in $stateNames) {
             $state = $Summary.States[$stateName]
-            $duration = if ($state.Duration) { [math]::Round($state.Duration.TotalSeconds, 1) } else { 0 }
+            $stateDuration = if ($state.Duration) { [math]::Round($state.Duration.TotalSeconds, 1) } else { 0 }
             
             if ($state.Actions -and $state.Actions.Count -gt 0) {
                 # State with actions: "fourthState: EXECUTED 4 actions - 3.6s"
-                $output += "$stateName`: EXECUTED $($state.Actions.Count) actions - $($duration)s"
+                $output += "$stateName`: EXECUTED $($state.Actions.Count) actions - $($stateDuration)s"
                 
                 # Action details
                 foreach ($action in $state.Actions) {
@@ -457,7 +511,7 @@ function Format-SimpleOutput {
                 } elseif ($state.Result -like "*endpoint*") {
                     $readinessInfo = " (endpoint 200 OK)"
                 }
-                $output += "$stateName`: READY$readinessInfo - $($duration)s"
+                $output += "$stateName`: READY$readinessInfo - $($stateDuration)s"
             }
         }
         
@@ -466,7 +520,7 @@ function Format-SimpleOutput {
     
     # Final status: "Status: SUCCESS (4/4 completed in 11.0s)"
     if ($Success) {
-        $completedCount = ($Summary.States.Values | Where-Object { $_.Success -eq $true }).Count
+        $completedCount = @($Summary.States.Values | Where-Object { $_.Success -eq $true }).Count
         $totalCount = $Summary.States.Count
         $output += "Status: SUCCESS ($completedCount/$totalCount completed in $($Duration)s)"
     } else {
@@ -483,101 +537,13 @@ Medium format summary function.
 function Format-MediumOutput {
     param([hashtable]$Summary, [bool]$Success, [string]$ErrorMessage, [double]$Duration)
     
-    $output = @()
+    # For Medium format, the header, execution flow, and state details are already shown in real-time
+    # Only show the final summary line
+    $successCount = @($Summary.States.Values | Where-Object { $_.Success -eq $true }).Count
+    $totalCount = $Summary.States.Count
+    $statusIcon = if ($Success) { "✅" } else { "❌" }
     
-    # Header: Boxed header with target name
-    $targetState = if ($Summary.TargetState) { $Summary.TargetState } else { "unknown" }
-    
-    # Calculate proper spacing for alignment
-    # Total box width is 80 characters
-    # Inner content width is 78 characters (between the ║ symbols)
-    $titleText = "🚀 Claude Task Runner"
-    $titleLength = $titleText.Length  # This will be 21
-    $titlePadding = 78 - $titleLength
-    $titleLeftPad = [math]::Floor($titlePadding / 2)
-    $titleRightPad = $titlePadding - $titleLeftPad
-    $runnerLine = "║" + " " * $titleLeftPad + $titleText + " " * $titleRightPad + "║"
-    
-    # For target line: "Target: " + targetState
-    $targetContent = "Target: $targetState"
-    $targetPadding = 78 - $targetContent.Length
-    $targetLeftPad = [math]::Floor($targetPadding / 2)
-    $targetRightPad = $targetPadding - $targetLeftPad
-    $targetLine = "║" + " " * $targetLeftPad + $targetContent + " " * $targetRightPad + "║"
-    
-    $output += "╔══════════════════════════════════════════════════════════════════════════════╗"
-    $output += $runnerLine
-    $output += $targetLine
-    $output += "╚══════════════════════════════════════════════════════════════════════════════╝"
-    $output += ""
-    
-    # Execution Flow
-    $output += "📊 EXECUTION FLOW"
-    $output += "─────────────────"
-    if ($Summary.States.Count -gt 0) {
-        $stateNames = $Summary.StateStartTimes.GetEnumerator() | Sort-Object Value | ForEach-Object { $_.Key }
-        $flowLine = $stateNames | ForEach-Object { "[$_]" }
-        $output += $flowLine -join " ──→ "
-    }
-    $output += ""
-    
-    # State Details
-    $output += "🔍 STATE DETAILS"
-    $output += "────────────────"
-    
-    if ($Summary.States.Count -gt 0) {
-        $stateNames = $Summary.StateStartTimes.GetEnumerator() | Sort-Object Value | ForEach-Object { $_.Key }
-        
-        foreach ($stateName in $stateNames) {
-            $state = $Summary.States[$stateName]
-            $duration = if ($state.Duration) { [math]::Round($state.Duration.TotalSeconds, 1) } else { 0 }
-            
-            # State header with dependencies
-            $dependencies = ""
-            if ($state.Dependencies -and $state.Dependencies.Count -gt 0) {
-                $dependencies = " (depends: $($state.Dependencies -join ', '))"
-            }
-            $output += "▶ $stateName$dependencies"
-            
-            # Check result or actions
-            if ($state.Actions -and $state.Actions.Count -gt 0) {
-                # State with actions: show action summary
-                $actionSummary = @()
-                foreach ($action in $state.Actions) {
-                    $actionDuration = if ($action.Duration) { [math]::Round($action.Duration.TotalSeconds, 1) } else { 0 }
-                    $actionName = if ($action.Description) { $action.Description } else { $action.Command }
-                    $actionSummary += "$actionName($($actionDuration)s)"
-                }
-                $output += "  Actions: $($actionSummary -join ' | ')"
-                $output += "  Result: ✅ COMPLETED"
-            } else {
-                # State without actions: show readiness check
-                $checkResult = ""
-                if ($state.Result -like "*command check*") {
-                    $checkResult = "docker info → ✅ READY"
-                } elseif ($state.Result -like "*endpoint*") {
-                    $checkResult = "https://localhost:5001/healthcheck → ✅ 200 OK"
-                } else {
-                    $checkResult = "readiness check → ✅ READY"
-                }
-                $output += "  Check: $checkResult"
-            }
-            
-            $output += "  Time: $($duration)s"
-            $output += ""
-        }
-    }
-    
-    # Summary
-    if ($Success) {
-        $completedCount = ($Summary.States.Values | Where-Object { $_.Success -eq $true }).Count
-        $totalCount = $Summary.States.Count
-        $output += "📈 SUMMARY: ✅ $completedCount/$totalCount states completed successfully in $($Duration)s"
-    } else {
-        $output += "📈 SUMMARY: ❌ Execution failed - $ErrorMessage"
-    }
-    
-    return $output
+    return "📈 SUMMARY: $statusIcon $successCount/$totalCount states completed successfully in $($Duration)s"
 }
 
 <#
