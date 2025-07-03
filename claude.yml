@@ -44,7 +44,7 @@ states:
     needs: [apiReady]
     actions:
       - type: command
-        command: Set-NodeVersion -Version v22.16.0
+        command: Set-NodeVersion ^22
 
       - type: command
         command: node --version
