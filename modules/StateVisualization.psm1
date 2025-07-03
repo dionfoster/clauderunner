@@ -621,14 +621,14 @@ function Show-ExecutionFlow {
     Write-Log -Level "SYSTEM" "📊 EXECUTION FLOW"
     Write-Log -Level "SYSTEM" "─────────────────"
     
-    # Create the flow line: [state1] ──→ [state2] ──→ [state3]
+    # Create the flow line: [state1] ➜ [state2] ➜ [state3]
     $flowParts = @()
     foreach ($state in $executionOrder) {
         $flowParts += "[$state]"
     }
     
     if ($flowParts.Count -gt 0) {
-        $flowLine = $flowParts -join " ──→ "
+        $flowLine = $flowParts -join " ➜ "
         Write-Log -Level "SYSTEM" $flowLine
     } else {
         Write-Log -Level "SYSTEM" "No states found"

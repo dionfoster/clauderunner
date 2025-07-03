@@ -224,4 +224,46 @@ Describe "State Visualization Module" {
             Assert-LogContent -TestLogPath $script:TestLogPath -Pattern "Total time:"
         }
     }
+    
+    Context "Execution Flow" {
+        BeforeEach {
+            # Use standardized BeforeEach setup
+            Reset-TestLogFile -TestLogPath $script:TestLogPath
+            if (Get-Command -Name Reset-StateMachineVariables -ErrorAction SilentlyContinue) {
+                Reset-StateMachineVariables
+            }
+            
+            # Set output format to Medium to trigger execution flow
+            Set-OutputFormat -OutputFormat "Medium"
+        }
+        
+        It "Shows execution flow with correct flowing arrows" {
+            # Arrange
+            $mockConfig = @{
+                states = @{
+                    "firstState" = @{
+                        needs = @()
+                    }
+                    "secondState" = @{
+                        needs = @("firstState")
+                    }
+                    "thirdState" = @{
+                        needs = @("secondState")
+                    }
+                }
+            }
+            
+            # Act
+            Show-ExecutionFlow -TargetStateName "thirdState" -Config $mockConfig
+            
+            # Assert
+            if (Test-Path $script:TestLogPath) {
+                $logContent = Get-Content -Path $script:TestLogPath -Raw
+                $logContent | Should -Match "📊 EXECUTION FLOW"
+                $logContent | Should -Match "\[firstState\] ➜ \[secondState\] ➜ \[thirdState\]"
+            } else {
+                "Log file doesn't exist" | Should -BeNullOrEmpty
+            }
+        }
+    }
 }

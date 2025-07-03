@@ -7,7 +7,7 @@
 
 📊 EXECUTION FLOW
 ─────────────────
-[firstState] ──→ [secondState] ──→ [thirdState] ──→ [fourthState]
+[firstState] ➜ [secondState] ➜ [thirdState] ➜ [fourthState]
 ^ write after parsing the configuration and determining the tasks to execute
 
 🔍 STATE DETAILS
