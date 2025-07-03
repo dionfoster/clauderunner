@@ -205,8 +205,44 @@ function Write-StateCheckResult {
         Set-SMStateStatus -Status "Processing"
     }
     
-    # Use the appropriate formatter for state check result
-    $output = & $script:RealtimeFormatters.StateCheckResult -IsReady $IsReady -CheckType $CheckType -AdditionalInfo $AdditionalInfo
+    # For elaborate format, we need to pass additional parameters
+    if ($script:CurrentOutputFormat -eq "Elaborate") {
+        # Calculate duration more defensively
+        $duration = 0.0
+        $status = if ($IsReady) { "SUCCESS" } else { "FAILED" }
+        
+        try {
+            # Get state summary safely
+            $summary = Get-SMStateSummary
+            
+            # Find the current processing state and calculate duration
+            if ($summary.States) {
+                foreach ($stateName in $summary.States.Keys) {
+                    $state = $summary.States[$stateName]
+                    if ($state.Status -eq "Processing") {
+                        # This state is currently being processed
+                        if ($summary.StateStartTimes -and $summary.StateStartTimes.ContainsKey($stateName)) {
+                            $startTime = $summary.StateStartTimes[$stateName]
+                            if ($startTime -and $startTime -is [DateTime]) {
+                                $duration = (Get-Date - $startTime).TotalSeconds
+                            }
+                        }
+                        break
+                    }
+                }
+            }
+        } catch {
+            # If anything fails, just use 0.0 duration
+            $duration = 0.0
+        }
+        
+        # Use the appropriate formatter for state check result with additional parameters
+        $output = & $script:RealtimeFormatters.StateCheckResult -IsReady $IsReady -CheckType $CheckType -AdditionalInfo $AdditionalInfo -Duration $duration -Status $status
+    } else {
+        # Use the standard formatter for other formats
+        $output = & $script:RealtimeFormatters.StateCheckResult -IsReady $IsReady -CheckType $CheckType -AdditionalInfo $AdditionalInfo
+    }
+    
     if ($output) {
         if ($output -is [array]) {
             foreach ($line in $output) {
@@ -230,13 +266,19 @@ Logs that actions are being executed.
 function Start-StateActions {
     # Use the appropriate formatter for state actions header
     $output = & $script:RealtimeFormatters.StateActionsHeader
-    if ($output -and $output -ne "") {
+    if ($output) {
         if ($output -is [array]) {
             foreach ($line in $output) {
-                Write-Log -Level "SYSTEM" $line
+                if ($null -ne $line -and $line.Trim() -ne "") {
+                    Write-Log -Level "SYSTEM" $line
+                } elseif ($null -ne $line -and ($line -eq "" -or $line -eq " ")) {
+                    Write-Log -Level "SYSTEM" " "
+                }
             }
         } else {
-            Write-Log -Level "SYSTEM" $output
+            if ($output -ne "") {
+                Write-Log -Level "SYSTEM" $output
+            }
         }
     }
 }
@@ -270,8 +312,28 @@ function Start-StateAction {
     
     $actionId = Register-SMStateAction -StateName $StateName -ActionType $ActionType -ActionCommand $ActionCommand -Description $Description
     
-    # Use the appropriate formatter for state action start
-    $output = & $script:RealtimeFormatters.StateActionStart -ActionType $ActionType -Description $Description -ActionCommand $ActionCommand
+    # For elaborate format, we need to pass action indexing information
+    if ($script:CurrentOutputFormat -eq "Elaborate") {
+        # Get action counts from state summary
+        $summary = Get-SMStateSummary
+        $actionIndex = 1
+        $totalActions = 1
+        
+        if ($summary.States -and $summary.States.ContainsKey($StateName)) {
+            $state = $summary.States[$StateName]
+            if ($state.Actions) {
+                $actionIndex = $state.Actions.Count + 1  # Next action to be registered
+                $totalActions = $actionIndex  # For now, we don't know total until complete
+            }
+        }
+        
+        # Use the appropriate formatter for state action start with indexing
+        $output = & $script:RealtimeFormatters.StateActionStart -ActionType $ActionType -Description $Description -ActionCommand $ActionCommand -ActionIndex $actionIndex -TotalActions $totalActions
+    } else {
+        # Use the standard formatter for other formats
+        $output = & $script:RealtimeFormatters.StateActionStart -ActionType $ActionType -Description $Description -ActionCommand $ActionCommand
+    }
+    
     if ($output) {
         if ($output -is [array]) {
             foreach ($line in $output) {
@@ -311,7 +373,8 @@ function Complete-StateAction {
         [string]$ActionId,
         [Parameter(Mandatory=$true)]
         [bool]$Success,
-        [string]$ErrorMessage = ""
+        [string]$ErrorMessage = "",
+        [int]$ExitCode = 0
     )
     
     # Complete action in state management
@@ -326,8 +389,15 @@ function Complete-StateAction {
         $duration = [math]::Round($action.Duration.TotalSeconds, 1)
     }
     
-    # Use the appropriate formatter for state action complete
-    $output = & $script:RealtimeFormatters.StateActionComplete -Success $Success -ErrorMessage $ErrorMessage -Duration $duration
+    # For elaborate format, we need to pass exit code
+    if ($script:CurrentOutputFormat -eq "Elaborate") {
+        # Use the appropriate formatter for state action complete with exit code
+        $output = & $script:RealtimeFormatters.StateActionComplete -Success $Success -ErrorMessage $ErrorMessage -Duration $duration -ExitCode $ExitCode
+    } else {
+        # Use the standard formatter for other formats
+        $output = & $script:RealtimeFormatters.StateActionComplete -Success $Success -ErrorMessage $ErrorMessage -Duration $duration
+    }
+    
     if ($output) {
         if ($output -is [array]) {
             foreach ($line in $output) {
@@ -363,7 +433,8 @@ function Complete-State {
         [string]$StateName,
         [Parameter(Mandatory=$true)]
         [bool]$Success,
-        [string]$ErrorMessage = ""
+        [string]$ErrorMessage = "",
+        [bool]$IsExecutionState = $false
     )
     
     # Check if the state is already completed to avoid duplicate output
@@ -384,8 +455,15 @@ function Complete-State {
     $state = $updatedSummary.States[$StateName]
     $duration = [math]::Round(($state.Duration.TotalSeconds), 1)
     
-    # Use the appropriate formatter for state complete
-    $output = & $script:RealtimeFormatters.StateComplete -Success $Success -ErrorMessage $ErrorMessage -Duration $duration -StateName $StateName
+    # For elaborate format, we need to pass execution state flag
+    if ($script:CurrentOutputFormat -eq "Elaborate") {
+        # Use the appropriate formatter for state complete with execution state flag
+        $output = & $script:RealtimeFormatters.StateComplete -Success $Success -ErrorMessage $ErrorMessage -Duration $duration -StateName $StateName -IsExecutionState $IsExecutionState
+    } else {
+        # Use the standard formatter for other formats
+        $output = & $script:RealtimeFormatters.StateComplete -Success $Success -ErrorMessage $ErrorMessage -Duration $duration -StateName $StateName
+    }
+    
     if ($output) {
         if ($output -is [array]) {
             foreach ($line in $output) {

@@ -282,8 +282,109 @@ function Reset-StateMachineVariables {
     $script:TotalStartTime = $null
 }
 
+<#
+.SYNOPSIS
+Gets the current duration of a state in processing.
+
+.DESCRIPTION
+Returns the duration of a state that is currently being processed.
+
+.PARAMETER StateName
+The name of the state to get duration for.
+
+.OUTPUTS
+The duration in seconds as a double, or 0 if state not found.
+#>
+function Get-CurrentStateDuration {
+    param(
+        [string]$StateName
+    )
+    
+    if ($script:StateStartTimes.ContainsKey($StateName)) {
+        $currentTime = Get-Date
+        $duration = $currentTime - $script:StateStartTimes[$StateName]
+        return $duration.TotalSeconds
+    }
+    
+    return 0.0
+}
+
+<#
+.SYNOPSIS
+Gets the name of the current state being processed.
+
+.DESCRIPTION
+Returns the name of the state that is currently being processed.
+
+.OUTPUTS
+The name of the current state, or empty string if no state is being processed.
+#>
+function Get-CurrentStateName {
+    # Find the state that is currently processing (has start time but no end time)
+    foreach ($stateName in $script:StateStartTimes.Keys) {
+        if ($script:ProcessedStates.ContainsKey($stateName)) {
+            $state = $script:ProcessedStates[$stateName]
+            if ($state.Status -eq "Processing") {
+                return $stateName
+            }
+        }
+    }
+    
+    return ""
+}
+
+<#
+.SYNOPSIS
+Gets the current action count for a state.
+
+.DESCRIPTION
+Returns the number of actions that have been registered for a state.
+
+.PARAMETER StateName
+The name of the state to get action count for.
+
+.OUTPUTS
+The number of actions registered for the state.
+#>
+function Get-StateActionCount {
+    param(
+        [string]$StateName
+    )
+    
+    if ($script:ProcessedStates.ContainsKey($StateName)) {
+        return $script:ProcessedStates[$StateName].Actions.Count
+    }
+    
+    return 0
+}
+
+<#
+.SYNOPSIS
+Gets the total planned action count for a state.
+
+.DESCRIPTION
+Returns the total number of actions planned for a state.
+For now, this returns the current count since we don't pre-plan actions.
+
+.PARAMETER StateName
+The name of the state to get total action count for.
+
+.OUTPUTS
+The total number of actions for the state.
+#>
+function Get-StateTotalActionCount {
+    param(
+        [string]$StateName
+    )
+    
+    # For now, return the current count since we don't pre-plan actions
+    # This could be enhanced to return planned count if we add that feature
+    return Get-StateActionCount -StateName $StateName
+}
+
 # Export module members
 Export-ModuleMember -Function Get-StateIcon, Start-StateTransitions, Start-StateProcessing,
     Register-StateAction, Complete-StateAction, Complete-State, Get-StateSummary, 
-    Set-StateStatus, Reset-StateMachineVariables -Variable StateTransitionStarted,
+    Set-StateStatus, Reset-StateMachineVariables, Get-CurrentStateDuration, Get-CurrentStateName,
+    Get-StateActionCount, Get-StateTotalActionCount -Variable StateTransitionStarted,
     StateStartTimes, ActionStartTimes, ProcessedStates, TotalStartTime, StatusIcons

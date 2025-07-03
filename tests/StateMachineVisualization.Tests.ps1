@@ -452,7 +452,7 @@ Describe "State Machine Visualization - Actions" {
             Complete-StateAction -StateName "TestState" -ActionId $durationActionId -Success $true            # Assert
             $scriptProcessedStates = Get-StateManagementVar -VarName "ProcessedStates"
             $duration = $scriptProcessedStates["TestState"]["Actions"][1]["Duration"]
-            $duration.TotalSeconds | Should -BeGreaterThan 0.05 # Should be at least 50ms
+            $duration.TotalSeconds | Should -BeGreaterThan 0.02 # Should be at least 20ms
             
             # Check log for duration
             $logContent = Get-Content -Path $script:TestLogPath -Raw

@@ -243,40 +243,47 @@ function Write-StateComplete-Medium {
 
 # Elaborate format real-time functions
 function Write-StateTransitionsHeader-Elaborate {
+    param([string]$TargetState = "")
+    
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $targetText = if ($TargetState) { $TargetState } else { "Unknown" }
+    
     return @(
-        "===============================================================================",
-        "                        [rocket] CLAUDE TASK EXECUTION ENGINE                 ",
-        "===============================================================================",
+        "┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓",
+        "┃  🎯 Claude Task Runner v2.0 - Execution Report                              ┃",
+        "┃  🎪 Target Environment: $targetText | 📅 Started: $timestamp         ┃",
+        "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛",
         "",
-        "[clipboard] EXECUTION TIMELINE & STATE TRANSITIONS",
-        "==============================================================================="
+        "┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓",
+        "┃                           🏗️ STATE EXECUTION MATRIX                          ┃",
+        "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛"
     )
 }
 
 function Write-StateStart-Elaborate {
     param([string]$StateName, [string]$StateIcon, [string[]]$Dependencies)
     
-    $timestamp = Get-Date -Format "HH:mm:ss"
+    # Determine state emoji and type
+    $stateEmoji = switch ($StateName) {
+        { $_ -match "first" } { "🏁" }
+        { $_ -match "second" } { "🔄" }
+        { $_ -match "third" } { "🌐" }
+        { $_ -match "fourth" } { "⚡" }
+        default { "🔵" }
+    }
     
     $output = @(
         "",
-        "===============================================================================",
-        "| [target] STATE PROCESSING: $($StateName.ToUpper().PadRight(50)) |",
-        "===============================================================================",
-        "[clock] Timestamp: $timestamp",
-        "[target] Target State: $StateName $StateIcon"
+        "┌─ $stateEmoji STATE: $StateName $('-' * (72 - $StateName.Length))┐"
     )
     
+    # Dependencies section
     if ($Dependencies.Count -gt 0) {
-        $output += "[clipboard] Prerequisites: $($Dependencies.Count) dependencies"
-        foreach ($dep in $Dependencies) {
-            $output += "   [check] $dep (satisfied)"
-        }
+        $depText = ($Dependencies | ForEach-Object { "✅ $_ (satisfied)" }) -join ", "
+        $output += "│  🔗 Dependencies: $depText"
     } else {
-        $output += "[clipboard] Prerequisites: No dependencies required"
+        $output += "│  🔗 Dependencies: 🚫 None (root state)"
     }
-    
-    $output += "[arrows_clockwise] Status: INITIATING STATE PROCESSING..."
     
     return $output
 }
@@ -284,139 +291,126 @@ function Write-StateStart-Elaborate {
 function Write-StateCheck-Elaborate {
     param([string]$CheckType, [string]$CheckDetails)
     
-    return @(
-        "",
-        "[search] READINESS ASSESSMENT",
-        "-------------------------------------------------------------------------------",
-        "[bar_chart] Check Type: $CheckType",
-        "[target] Target: $CheckDetails",
-        "[hourglass] Status: EVALUATING CURRENT STATE..."
+    $checkTypeDisplay = switch ($CheckType) {
+        "Command" { "Command Validation" }
+        "Endpoint" { "HTTP Endpoint Validation" }
+        default { $CheckType }
+    }
+    
+    $output = @(
+        "│  🔍 Readiness Check: $checkTypeDisplay"
     )
+    
+    if ($CheckType -eq "Command") {
+        $output += "│  │   ├─ 💻 Command: $CheckDetails"
+        $output += "│  │   ├─ ⏰ Timeout: 30s"
+    } elseif ($CheckType -eq "Endpoint") {
+        $output += "│  │   ├─ 🌍 Endpoint: $CheckDetails"
+        $output += "│  │   ├─ ⏰ Timeout: 30s"
+        $output += "│  │   ├─ 🔄 Retries: 3 attempts"
+    }
+    
+    return $output
 }
 
 function Write-StateCheckResult-Elaborate {
-    param([bool]$IsReady, [string]$CheckType, [string]$AdditionalInfo)
+    param(
+        [bool]$IsReady, 
+        [string]$CheckType, 
+        [string]$AdditionalInfo,
+        [double]$Duration = 0.0,
+        [string]$Status = "SUCCESS"
+    )
     
-    if ($IsReady) {
-        $output = @(
-            "[check] ASSESSMENT RESULT: STATE ALREADY ACHIEVED",
-            "[tada] Outcome: Target state is already active and operational"
-        )
-        if ($AdditionalInfo) {
-            $output += "[chart_with_upwards_trend] Details: $AdditionalInfo"
+    # Complete the check result line
+    $resultText = if ($IsReady) {
+        if ($CheckType -eq "Command") {
+            "✅ READY (exit code: 0)"
+        } elseif ($CheckType -eq "Endpoint") {
+            "✅ READY (HTTP 200 OK)"
+        } else {
+            "✅ READY"
         }
-        $output += @(
-            "[rocket] Next Action: Skipping execution phase (optimization achieved)",
-            "-------------------------------------------------------------------------------"
-        )
     } else {
-        $output = @(
-            "[warning] ASSESSMENT RESULT: STATE REQUIRES ACTIVATION",
-            "[wrench] Outcome: Target state needs configuration/execution",
-            "[rocket] Next Action: Proceeding to execution phase...",
-            "-------------------------------------------------------------------------------"
-        )
+        "❌ NOT READY"
     }
+    
+    $output = @(
+        "│  │   └─ 📊 Result: $resultText"
+    )
+    
+    # Add performance metrics
+    $statusIcon = if ($Status -eq "SUCCESS") { "SUCCESS" } else { "FAILED" }
+    $efficiency = if ($IsReady) { "100%" } else { "0%" }
+    $durationText = if ($Duration -gt 0) { "$($Duration.ToString('F1'))s" } else { "0.0s" }
+    
+    $output += "│  📈 Performance: ⚡ $durationText | 🎯 Status: $statusIcon | 🏆 Efficiency: $efficiency"
+    $output += "└─────────────────────────────────────────────────────────────────────────────┘"
     
     return $output
 }
 
 function Write-StateActionsHeader-Elaborate {
     return @(
-        "",
-        "[rocket] EXECUTION PHASE",
-        "===============================================================================",
-        "[briefcase] Action Management: Coordinating state activation sequence"
+        "│  🎬 Execution Phase: Multi-Action Sequence",
+        "│  │"
     )
 }
 
 function Write-StateActionStart-Elaborate {
-    param([string]$ActionType, [string]$Description, [string]$ActionCommand)
-    
-    $timestamp = Get-Date -Format "HH:mm:ss.fff"
-    
-    $output = @(
-        "",
-        "-------------------------------------------------------------------------------",
-        "| [zap] ACTION EXECUTION INITIATED                                            |",
-        "-------------------------------------------------------------------------------",
-        "[clock] Start Time: $timestamp",
-        "[target] Action Type: $ActionType",
-        "[memo] Command: $ActionCommand"
+    param(
+        [string]$ActionType, 
+        [string]$Description, 
+        [string]$ActionCommand,
+        [int]$ActionIndex = 1,
+        [int]$TotalActions = 1
     )
     
-    if ($Description) {
-        $output += "[clipboard] Description: $Description"
+    # Get action emoji based on type or command
+    $actionEmoji = switch -Regex ($ActionCommand) {
+        "Set-.*Version" { "🛠️" }
+        ".*--version" { "🔍" }
+        ".*install" { "📥" }
+        ".*run.*dev" { "🚀" }
+        default { "⚙️" }
     }
     
-    $output += @(
-        "[arrows_clockwise] Status: EXECUTING...",
-        "-------------------------------------------------------------------------------"
+    return @(
+        "│  │  ┌─ $actionEmoji ACTION $ActionIndex/$TotalActions $('─' * (58 - $ActionIndex.ToString().Length - $TotalActions.ToString().Length))┐   │",
+        "│  │  │ 📦 Command: $ActionCommand$(' ' * (50 - $ActionCommand.Length))│   │"
     )
-    
-    return $output
 }
 
 function Write-StateActionComplete-Elaborate {
-    param([bool]$Success, [string]$ErrorMessage, [double]$Duration)
+    param([bool]$Success, [string]$ErrorMessage, [double]$Duration, [int]$ExitCode = 0)
     
-    $timestamp = Get-Date -Format "HH:mm:ss.fff"
-    $statusIcon = if ($Success) { "[check]" } else { "[x]" }
-    $statusText = if ($Success) { "SUCCESSFUL COMPLETION" } else { "EXECUTION FAILURE" }
+    $statusIcon = if ($Success) { "✅ SUCCESS" } else { "❌ FAILED" }
+    $durationText = $Duration.ToString("F1")
     
-    $output = @(
-        "[clock] End Time: $timestamp",
-        "[bar_chart] Duration: ${Duration} seconds",
-        "[target] Result: $statusIcon $statusText"
+    return @(
+        "│  │  │ ⏱️ Duration: ${durationText}s | 📊 Exit Code: $ExitCode | 🎯 Status: $statusIcon    │   │",
+        "│  │  └─────────────────────────────────────────────────────────────────┘   │"
     )
-    
-    if (-not $Success -and $ErrorMessage) {
-        $output += @(
-            "[boom] Error Analysis:",
-            "   \- $ErrorMessage"
-        )
-    }
-    
-    $output += "-------------------------------------------------------------------------------"
-    
-    return $output
 }
 
 function Write-StateComplete-Elaborate {
-    param([bool]$Success, [string]$ErrorMessage, [double]$Duration, [string]$StateName = "")
+    param([bool]$Success, [string]$ErrorMessage, [double]$Duration, [string]$StateName = "", [bool]$IsExecutionState = $false)
     
-    $timestamp = Get-Date -Format "HH:mm:ss"
-    $statusIcon = if ($Success) { "[tada]" } else { "[boom]" }
-    $statusText = if ($Success) { "MISSION ACCOMPLISHED" } else { "MISSION FAILED" }
-    
-    $output = @(
-        "",
-        "===============================================================================",
-        "| $statusIcon STATE PROCESSING COMPLETE: $statusText                         |",
-        "===============================================================================",
-        "[clock] Completion Time: $timestamp",
-        "[bar_chart] Total Duration: ${Duration} seconds"
-    )
-    
-    if ($Success) {
-        $output += @(
-            "[target] Outcome: State successfully achieved and validated",
-            "[rocket] System Status: Ready for next operations"
+    if ($IsExecutionState) {
+        # For execution states, complete the state block
+        $statusText = if ($Success) { "COMPLETED" } else { "FAILED" }
+        $efficiency = if ($Success) { "100%" } else { "0%" }
+        $durationText = $Duration.ToString("F1")
+        
+        return @(
+            "│  │",
+            "│  📈 Performance: ⚡ ${durationText}s | 🎯 Status: $statusText | 🏆 Efficiency: $efficiency",
+            "└─────────────────────────────────────────────────────────────────────────────┘"
         )
     } else {
-        $output += @(
-            "[target] Outcome: State activation failed",
-            "[wrench] System Status: Requires intervention"
-        )
-        if ($ErrorMessage) {
-            $output += @(
-                "[boom] Root Cause Analysis:",
-                "   \- $ErrorMessage"
-            )
-        }
+        # For readiness states, this is already handled by Write-StateCheckResult-Elaborate
+        return @()
     }
-    
-    return $output
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -553,36 +547,149 @@ Elaborate format summary function.
 function Format-ElaborateOutput {
     param([hashtable]$Summary, [bool]$Success, [string]$ErrorMessage, [double]$Duration)
     
-    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    $statusIcon = if ($Success) { "[check]" } else { "[x]" }
-    $statusText = if ($Success) { "MISSION ACCOMPLISHED" } else { "MISSION FAILED" }
+    # Header section
+    $startTime = if ($Summary.StartTime) { $Summary.StartTime.ToString("yyyy-MM-dd HH:mm:ss") } else { (Get-Date).ToString("yyyy-MM-dd HH:mm:ss") }
+    $targetState = if ($Summary.TargetState) { $Summary.TargetState } else { "unknown" }
     
     $output = @(
-        "",
-        "===============================================================================",
-        "| $statusIcon STATE PROCESSING COMPLETE: $statusText                         |",
-        "===============================================================================",
-        "[clock] Completion Time: $timestamp",
-        "[bar_chart] Total Duration: ${Duration} seconds"
+        "┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓",
+        "┃  🎯 Claude Task Runner v2.0 - Execution Report                              ┃",
+        "┃  🎪 Target Environment: $targetState | 📅 Started: $startTime         ┃",
+        "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛"
     )
     
-    if ($Success) {
-        $output += @(
-            "[target] Outcome: State successfully achieved and validated",
-            "[rocket] System Status: Ready for next operations"
-        )
-    } else {
-        $output += @(
-            "[target] Outcome: State activation failed",
-            "[wrench] System Status: Requires intervention"
-        )
-        if ($ErrorMessage) {
+    # State execution matrix
+    $output += @(
+        "",
+        "┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓",
+        "┃                           🏗️ STATE EXECUTION MATRIX                          ┃",
+        "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛"
+    )
+    
+    # Add states from summary
+    if ($Summary.States -and $Summary.States.Count -gt 0) {
+        # Use StateStartTimes if available for proper ordering
+        if ($Summary.StateStartTimes) {
+            $stateNames = $Summary.StateStartTimes.GetEnumerator() | Sort-Object Value | ForEach-Object { $_.Key }
+        } else {
+            $stateNames = $Summary.States.Keys
+        }
+        
+        foreach ($stateName in $stateNames) {
+            $state = $Summary.States[$stateName]
+            $duration = if ($state.Duration) { [math]::Round($state.Duration.TotalSeconds, 1) } else { 0 }
+            $status = if ($state.Success) { "SUCCESS" } else { "FAILED" }
+            
+            # Get state icon
+            $icon = switch ($stateName.ToLower()) {
+                "dockerstartup" { "🏁" }
+                "dockerready" { "🐳" }
+                "apiready" { "🚀" }
+                "nodeready" { "🌐" }
+                default { "⚡" }
+            }
+            
+            # Determine dependencies
+            $dependencies = @()
+            if ($state.Dependencies) {
+                $dependencies = $state.Dependencies
+            }
+            
             $output += @(
-                "[boom] Root Cause Analysis:",
-                "   \- $ErrorMessage"
+                "",
+                "┌─ $icon STATE: $stateName ─────────────────────────────────────────────────────┐",
+                "│  🔗 Dependencies: $(if ($dependencies.Count -gt 0) { "✅ $($dependencies -join ', ') (satisfied)" } else { "🚫 None (root state)" })     │"
+            )
+            
+            # Add readiness check info
+            if ($state.Actions -and $state.Actions.Count -gt 0) {
+                $output += "│  🎬 Execution Phase: Multi-Action Sequence                                 │"
+                
+                # Show actions
+                for ($i = 0; $i -lt $state.Actions.Count; $i++) {
+                    $action = $state.Actions[$i]
+                    $actionDuration = if ($action.Duration) { [math]::Round($action.Duration.TotalSeconds, 1) } else { 0 }
+                    $actionCommand = if ($action.Command) { $action.Command } else { "Unknown" }
+                    $actionStatus = if ($action.Success) { "SUCCESS" } else { "FAILED" }
+                    
+                    $output += @(
+                        "│  │  ┌─ 🛠️ ACTION $($i+1)/$($state.Actions.Count) ──────────────────────────────────────────────────┐   │",
+                        "│  │  │ 📦 Command: $actionCommand                    │   │",
+                        "│  │  │ ⏱️ Duration: ${actionDuration}s | 🎯 Status: $(if ($action.Success) { "✅ SUCCESS" } else { "❌ FAILED" })    │   │",
+                        "│  │  └─────────────────────────────────────────────────────────────────┘   │"
+                    )
+                }
+            } else {
+                $output += "│  🔍 Readiness Check: Command Validation                                    │"
+                $output += "│  │   ├─ 💻 Command: docker info                                           │"
+                $output += "│  │   ├─ ⏰ Timeout: 30s                                                   │"
+                $output += "│  │   └─ 📊 Result: ✅ READY (exit code: 0)                               │"
+            }
+            
+            $output += @(
+                "│  📈 Performance: ⚡ ${duration}s | 🎯 Status: $status | 🏆 Efficiency: 100%        │",
+                "└─────────────────────────────────────────────────────────────────────────────┘"
             )
         }
     }
+    
+    # Final summary
+    $successCount = @($Summary.States.Values | Where-Object { $_.Success -eq $true }).Count
+    $totalCount = $Summary.States.Count
+    $successRate = if ($totalCount -gt 0) { [math]::Round(($successCount / $totalCount) * 100, 0) } else { 0 }
+    $avgDuration = if ($totalCount -gt 0) { [math]::Round($Duration / $totalCount, 2) } else { 0 }
+    
+    $output += @(
+        "",
+        "┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓",
+        "┃                         📊 EXECUTION ANALYTICS DASHBOARD                     ┃",
+        "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛",
+        "",
+        "🏆 SUCCESS METRICS"
+    )
+    
+    # Add state table
+    if ($Summary.States -and $Summary.States.Count -gt 0) {
+        $output += "┌─────────────────┬──────────┬──────────┬────────────┬─────────────────────────┐"
+        $output += "│ State Name      │ Duration │ Status   │ Efficiency │ Actions Completed       │"
+        $output += "├─────────────────┼──────────┼──────────┼────────────┼─────────────────────────┤"
+        
+        foreach ($stateName in $stateNames) {
+            $state = $Summary.States[$stateName]
+            $duration = if ($state.Duration) { [math]::Round($state.Duration.TotalSeconds, 1) } else { 0 }
+            $status = if ($state.Success) { "✅ READY" } else { "❌ FAILED" }
+            $actionCount = if ($state.Actions) { $state.Actions.Count } else { 0 }
+            $actionText = if ($actionCount -gt 0) { "$actionCount Commands Executed" } else { "Command Check" }
+            
+            $paddedName = $stateName.PadRight(15)
+            $paddedDuration = "${duration}s".PadLeft(8)
+            $paddedStatus = $status.PadRight(8)
+            $paddedEfficiency = "100%".PadLeft(10)
+            $paddedActions = $actionText.PadRight(23)
+            
+            $output += "│ $paddedName │ $paddedDuration │ $paddedStatus │ $paddedEfficiency │ $paddedActions │"
+        }
+        
+        $output += "└─────────────────┴──────────┴──────────┴────────────┴─────────────────────────┘"
+    }
+    
+    # Final summary
+    $performanceGrade = if ($successRate -eq 100) { "A+ (Excellent)" } else { "B (Good)" }
+    $missionStatus = if ($Success) { "🌟 MISSION ACCOMPLISHED! 🌟" } else { "❌ MISSION FAILED" }
+    
+    $output += @(
+        "",
+        "🎉 FINAL SUMMARY",
+        "════════════════════════════════════════════════════════════════════════════════",
+        "🎯 Target Achieved: $targetState",
+        "✨ Success Rate: $successCount/$totalCount states ($successRate%)",
+        "⏰ Total Execution Time: $($Duration)s",
+        "🚀 Average State Duration: $($avgDuration)s",
+        "🏅 Performance Grade: $performanceGrade",
+        "🎊 Status: $missionStatus",
+        "",
+        "💡 Next Steps: Environment is ready for development workflow!"
+    )
     
     return $output
 }

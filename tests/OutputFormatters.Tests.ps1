@@ -217,8 +217,117 @@ Describe "Output Formatters Module" {
             $result = Format-ElaborateOutput -Summary $testSummary -Success $true -ErrorMessage "" -Duration 5.0
             
             # Assert
-            ($result -join "`n") | Should -Match "STATE PROCESSING COMPLETE: MISSION ACCOMPLISHED"
-            ($result -join "`n") | Should -Match "Completion Time:"
+            ($result -join "`n") | Should -Match "🎯 Claude Task Runner v2.0 - Execution Report"
+            ($result -join "`n") | Should -Match "🎉 FINAL SUMMARY"
+        }
+        
+        It "Elaborate format produces comprehensive report structure" {
+            # Arrange - Create a complex summary with multiple states and actions
+            $testSummary = @{
+                States = @{
+                    "dockerStartup" = @{
+                        Success = $true
+                        Duration = [timespan]::FromSeconds(2.5)
+                        Actions = @()
+                    }
+                    "apiReady" = @{
+                        Success = $true
+                        Duration = [timespan]::FromSeconds(5.2)
+                        Actions = @(
+                            @{
+                                Command = "dotnet run"
+                                Duration = [timespan]::FromSeconds(0.3)
+                                Success = $true
+                            }
+                            @{
+                                Command = "Endpoint polling"
+                                Duration = [timespan]::FromSeconds(4.9)
+                                Success = $true
+                            }
+                        )
+                    }
+                }
+                StateStartTimes = @{
+                    "dockerStartup" = Get-Date
+                    "apiReady" = Get-Date
+                }
+                TargetState = "apiReady"
+            }
+            
+            # Act
+            $result = Format-ElaborateOutput -Summary $testSummary -Success $true -ErrorMessage "" -Duration 7.7
+            
+            # Assert - Check for all major sections
+            $joinedResult = $result -join "`n"
+            
+            # Header section
+            $joinedResult | Should -Match "🎯 Claude Task Runner v2.0 - Execution Report"
+            $joinedResult | Should -Match "🎪 Target Environment: apiReady"
+            
+            # State execution matrix
+            $joinedResult | Should -Match "🏗️ STATE EXECUTION MATRIX"
+            $joinedResult | Should -Match "🏁 STATE: dockerStartup"
+            $joinedResult | Should -Match "🚀 STATE: apiReady"
+            
+            # Dependencies
+            $joinedResult | Should -Match "🔗 Dependencies:"
+            
+            # Actions for multi-action state
+            $joinedResult | Should -Match "🎬 Execution Phase: Multi-Action Sequence"
+            $joinedResult | Should -Match "🛠️ ACTION 1/2"
+            $joinedResult | Should -Match "🛠️ ACTION 2/2"
+            $joinedResult | Should -Match "📦 Command: dotnet run"
+            $joinedResult | Should -Match "📦 Command: Endpoint polling"
+            
+            # Performance metrics
+            $joinedResult | Should -Match "📈 Performance: ⚡"
+            $joinedResult | Should -Match "🎯 Status: SUCCESS"
+            $joinedResult | Should -Match "🏆 Efficiency: 100%"
+            
+            # Analytics dashboard
+            $joinedResult | Should -Match "📊 EXECUTION ANALYTICS DASHBOARD"
+            $joinedResult | Should -Match "🏆 SUCCESS METRICS"
+            $joinedResult | Should -Match "State Name.*Duration.*Status.*Efficiency.*Actions Completed"
+            
+            # Final summary
+            $joinedResult | Should -Match "🎉 FINAL SUMMARY"
+            $joinedResult | Should -Match "🎯 Target Achieved: apiReady"
+            $joinedResult | Should -Match "✨ Success Rate: 2/2 states \(100%\)"
+            $joinedResult | Should -Match "⏰ Total Execution Time: 5.2s"
+            $joinedResult | Should -Match "🏅 Performance Grade: A\+ \(Excellent\)"
+            $joinedResult | Should -Match "🎊 Status: 🌟 MISSION ACCOMPLISHED! 🌟"
+        }
+        
+        It "Elaborate format handles failed states correctly" {
+            # Arrange - Create a summary with mixed success/failure
+            $testSummary = @{
+                States = @{
+                    "successState" = @{
+                        Success = $true
+                        Duration = [timespan]::FromSeconds(1.0)
+                        Actions = @()
+                    }
+                    "failedState" = @{
+                        Success = $false
+                        Duration = [timespan]::FromSeconds(0.5)
+                        Actions = @()
+                        ErrorMessage = "Test failure"
+                    }
+                }
+                StateStartTimes = @{
+                    "successState" = Get-Date
+                    "failedState" = Get-Date
+                }
+                TargetState = "failedState"
+            }
+            
+            # Act
+            $result = Format-ElaborateOutput -Summary $testSummary -Success $false -ErrorMessage "One or more states failed" -Duration 1.5
+            
+            # Assert
+            $joinedResult = $result -join "`n"
+            $joinedResult | Should -Match "✨ Success Rate: 1/2 states \(50%\)"
+            $joinedResult | Should -Match "🏅 Performance Grade: B \(Good\)"
         }
     }
 }
