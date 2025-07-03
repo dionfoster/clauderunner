@@ -454,7 +454,18 @@ function Invoke-Command {
     # Transform command based on launch method
     $transformedCommand = ConvertTo-LaunchCommand -Command $resolvedCommand -LaunchVia $LaunchVia -WorkingDirectory $WorkingDirectory
     
-    try {        # Execute command
+    # Override CommandType based on launch method requirements
+    # windowsApp always uses cmd, newWindow always uses powershell
+    # console preserves the explicitly passed CommandType
+    if ($LaunchVia -eq "windowsApp") {
+        $CommandType = "cmd"
+    } elseif ($LaunchVia -eq "newWindow") {
+        $CommandType = "powershell"
+    }
+    # For console launch, preserve the explicitly passed CommandType
+    
+    try {
+        # Execute command
         $icon = "⏳"  # Use direct icon instead of calling function
         $result = Invoke-CommandWithTimeout -Command $transformedCommand.Command `
                                            -CommandType $CommandType `

@@ -173,6 +173,41 @@ Describe "CommandExecution Module" {
             $result.CommandType | Should -Be "powershell"
             $result.PreserveWorkingDir | Should -Be $false
         }
+        
+        It "Sets CommandType to cmd for windowsApp launch method" {
+            # Arrange
+            $command = "C:\Program Files\Test\test.exe"
+            
+            # Act
+            $result = ConvertTo-LaunchCommand -Command $command -LaunchVia "windowsApp"
+            
+            # Assert
+            $result.CommandType | Should -Be "cmd"
+            $result.Command | Should -Match "start"
+        }
+        
+        It "Sets CommandType to powershell for newWindow launch method" {
+            # Arrange
+            $command = "npm install"
+            
+            # Act
+            $result = ConvertTo-LaunchCommand -Command $command -LaunchVia "newWindow"
+            
+            # Assert
+            $result.CommandType | Should -Be "powershell"
+            $result.Command | Should -Match "Start-Process"
+        }
+        
+        It "Sets CommandType to powershell for console launch method" {
+            # Arrange
+            $command = "echo test"
+            
+            # Act
+            $result = ConvertTo-LaunchCommand -Command $command -LaunchVia "console"
+            
+            # Assert
+            $result.CommandType | Should -Be "powershell"
+        }
     }
     
     Context "Get-ExecutableAndArgs with edge cases" {
@@ -422,11 +457,16 @@ Describe "CommandExecution Module" {
         }
         
         It "Resolves command aliases before execution" {
-            # Act - Using a more reliable test that doesn't depend on npm being installed
+            # Arrange
+            Mock Invoke-CommandWithTimeout { return @{ Success = $true; Output = "" } } -ModuleName "CommandExecution"
+            
+            # Act - Using a node command that should be resolved by the alias system
             $result = Invoke-Command -Command "node --help" -Description "Test node" -StateName "teststate"
             
             # Assert - Should not throw and execute the resolved command
-            $result | Should -BeOfType [bool]
+            $result | Should -BeTrue
+            # Verify that the command was executed (alias resolution doesn't change 'node' since it's in the alias table)
+            Should -Invoke Invoke-CommandWithTimeout -ParameterFilter { $Command -match "node --help" } -ModuleName "CommandExecution"
         }
         
         It "Uses specified command type" {
@@ -478,11 +518,16 @@ Describe "CommandExecution Module" {
         }
         
         It "Uses windowsApp launch method" {
-            # Act - Using a harmless command that should work
+            # Arrange
+            Mock Invoke-CommandWithTimeout { return @{ Success = $true; Output = "" } } -ModuleName "CommandExecution"
+            
+            # Act
             $result = Invoke-Command -Command "calc.exe" -Description "Test command" -StateName "teststate" -LaunchVia "windowsApp"
             
             # Assert
-            $result | Should -BeOfType [bool]
+            $result | Should -BeTrue
+            # Verify that the command was transformed for windowsApp launch and uses cmd
+            Should -Invoke Invoke-CommandWithTimeout -ParameterFilter { $CommandType -eq "cmd" -and $Command -match "start" } -ModuleName "CommandExecution"
         }
         
         It "Handles command with output but still succeeds" {
@@ -494,11 +539,16 @@ Describe "CommandExecution Module" {
         }
         
         It "Handles newWindow launch method" {
+            # Arrange
+            Mock Invoke-CommandWithTimeout { return @{ Success = $true; Output = "" } } -ModuleName "CommandExecution"
+            
             # Act
             $result = Invoke-Command -Command "echo test" -Description "Test command" -StateName "teststate" -LaunchVia "newWindow" -CommandType "cmd"
             
             # Assert
-            $result | Should -BeOfType [bool]
+            $result | Should -BeTrue
+            # Verify that the command was transformed for newWindow launch and uses powershell
+            Should -Invoke Invoke-CommandWithTimeout -ParameterFilter { $CommandType -eq "powershell" -and $Command -match "Start-Process" } -ModuleName "CommandExecution"
         }
         
         It "Executes command with working directory preservation" {
@@ -523,6 +573,47 @@ Describe "CommandExecution Module" {
             
             # Assert
             $result | Should -BeTrue
+        }
+    }
+    
+    Context "Invoke-Command CommandType behavior" {
+        It "Should preserve explicitly passed CommandType for console launch" {
+            # Arrange
+            Mock Invoke-CommandWithTimeout { return @{ Success = $true; Output = "" } } -ModuleName "CommandExecution"
+            
+            # Act
+            $result = Invoke-Command -Command "ver" -Description "Test command" -StateName "test" -LaunchVia "console" -CommandType "cmd"
+            
+            # Assert
+            $result | Should -BeTrue
+            # Verify that Invoke-CommandWithTimeout was called with the explicitly passed cmd CommandType
+            Should -Invoke Invoke-CommandWithTimeout -ParameterFilter { $CommandType -eq "cmd" } -ModuleName "CommandExecution"
+        }
+        
+        It "Should override CommandType for windowsApp launch regardless of explicit parameter" {
+            # Arrange
+            Mock Invoke-CommandWithTimeout { return @{ Success = $true; Output = "" } } -ModuleName "CommandExecution"
+            
+            # Act
+            $result = Invoke-Command -Command "C:\Program Files\Test\test.exe" -Description "Test app" -StateName "test" -LaunchVia "windowsApp" -CommandType "powershell"
+            
+            # Assert
+            $result | Should -BeTrue
+            # Verify that Invoke-CommandWithTimeout was called with cmd CommandType (overridden from powershell)
+            Should -Invoke Invoke-CommandWithTimeout -ParameterFilter { $CommandType -eq "cmd" } -ModuleName "CommandExecution"
+        }
+        
+        It "Should override CommandType for newWindow launch regardless of explicit parameter" {
+            # Arrange
+            Mock Invoke-CommandWithTimeout { return @{ Success = $true; Output = "" } } -ModuleName "CommandExecution"
+            
+            # Act
+            $result = Invoke-Command -Command "npm install" -Description "Test npm" -StateName "test" -LaunchVia "newWindow" -CommandType "cmd"
+            
+            # Assert
+            $result | Should -BeTrue
+            # Verify that Invoke-CommandWithTimeout was called with powershell CommandType (overridden from cmd)
+            Should -Invoke Invoke-CommandWithTimeout -ParameterFilter { $CommandType -eq "powershell" } -ModuleName "CommandExecution"
         }
     }
 }
