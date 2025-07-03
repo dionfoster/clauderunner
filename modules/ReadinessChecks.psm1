@@ -2,6 +2,7 @@
 
 # Import required modules
 Import-Module "$PSScriptRoot\StateVisualization.psm1"
+Import-Module "$PSScriptRoot\Logging.psm1"
 
 # No wrapper functions to avoid infinite recursion
 
@@ -36,6 +37,14 @@ function Test-WebEndpoint {
         return $true
     }
     catch {
+        # Log certificate-specific errors with helpful information
+        if ($_.Exception.Message -like "*certificate*" -or $_.Exception.Message -like "*SSL*" -or $_.Exception.Message -like "*TLS*") {
+            Write-Log -Message "Certificate validation failed for endpoint '$Uri': $($_.Exception.Message)" -Level "WARN"
+            Write-Log -Message "For development environments, consider using HTTP instead of HTTPS, or ensure valid certificates are installed." -Level "INFO"
+        }
+        else {
+            Write-Log -Message "Endpoint '$Uri' is not accessible: $($_.Exception.Message)" -Level "DEBUG"
+        }
         return $false
     }
 }
@@ -244,7 +253,8 @@ function Test-PreCheck {
       # First check if this is an endpoint pre-check
     if ($StateConfig -and $StateConfig.readiness) {
         # Use the helper function to get the appropriate endpoint for checking
-        $checkEndpoint = Get-EndpointUri -StateConfig $StateConfig
+        # For pre-checks, prefer waitEndpoint over checkEndpoint as this is a readiness check
+        $checkEndpoint = Get-EndpointUri -StateConfig $StateConfig -ForWaiting
         
         # If we have an endpoint to check, test it directly
         if ($checkEndpoint) {
