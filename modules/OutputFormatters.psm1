@@ -287,7 +287,7 @@ function Write-StateStart-Elaborate {
     
     $output = @(
         "",
-        "┌─ $stateEmoji STATE: $StateName $('-' * (72 - $StateName.Length))┐"
+        "┌─ $stateEmoji STATE: $StateName $('─' * (69 - $StateName.Length))┐"
     )
     
     # Dependencies section
@@ -610,7 +610,7 @@ function Format-ElaborateOutput {
             
             $output += @(
                 "",
-                "┌─ $icon STATE: $stateName ─────────────────────────────────────────────────────┐",
+                "┌─ $icon STATE: $stateName $('─' * (69 - $stateName.Length))┐",
                 "│  🔗 Dependencies: $(if ($dependencies.Count -gt 0) { "✅ $($dependencies -join ', ') (satisfied)" } else { "🚫 None (root state)" })     │"
             )
             
