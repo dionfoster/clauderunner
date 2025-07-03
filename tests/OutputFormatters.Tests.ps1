@@ -329,5 +329,73 @@ Describe "Output Formatters Module" {
             $joinedResult | Should -Match "✨ Success Rate: 1/2 states \(50%\)"
             $joinedResult | Should -Match "🏅 Performance Grade: B \(Good\)"
         }
+        
+        It "Elaborate format header alignment is correct" {
+            # Test the real-time header function alignment
+            $formatters = Get-RealtimeFormatters -FormatName "Elaborate"
+            $result = & $formatters.StateTransitionsHeader "testTarget"
+            
+            # Find the content lines (between ┃ characters)
+            $contentLines = $result | Where-Object { $_ -match "^┃.*┃$" }
+            
+            # Each content line should be exactly 84 characters (same as borders)
+            foreach ($line in $contentLines) {
+                $line.Length | Should -Be 84
+                $line | Should -Match "^┃.*┃$"
+            }
+            
+            # Border lines should also be 84 characters
+            $borderLines = $result | Where-Object { $_ -match "^[┏┗].*[┓┛]$" }
+            foreach ($line in $borderLines) {
+                $line.Length | Should -Be 84
+            }
+            
+            # All lines should be the same length for perfect alignment
+            $allBoxLines = $result | Where-Object { $_ -match "^[┏┃┗].*[┓┃┛]$" }
+            $allBoxLines | ForEach-Object { $_.Length | Should -Be 84 }
+        }
+        
+        It "Elaborate format summary header alignment is correct" {
+            # Arrange
+            $testSummary = @{
+                States = @{
+                    "TestState" = @{
+                        Success = $true
+                        Duration = [timespan]::FromSeconds(2.0)
+                        Actions = @()
+                    }
+                }
+                StateStartTimes = @{
+                    "TestState" = Get-Date
+                }
+                TargetState = "testTarget"
+                StartTime = Get-Date
+            }
+            
+            # Act
+            $result = Format-ElaborateOutput -Summary $testSummary -Success $true -ErrorMessage "" -Duration 5.0
+            
+            # Find analytics dashboard header
+            $analyticsHeaderIndex = 0
+            for ($i = 0; $i -lt $result.Count; $i++) {
+                if ($result[$i] -match "📊 EXECUTION ANALYTICS DASHBOARD") {
+                    $analyticsHeaderIndex = $i
+                    break
+                }
+            }
+            
+            # Check analytics dashboard alignment
+            if ($analyticsHeaderIndex -gt 0) {
+                $dashboardBorderTop = $result[$analyticsHeaderIndex - 1]
+                $dashboardContent = $result[$analyticsHeaderIndex]
+                $dashboardBorderBottom = $result[$analyticsHeaderIndex + 1]
+                
+                # All lines should be 84 characters for perfect alignment
+                $dashboardBorderTop.Length | Should -Be 84
+                $dashboardBorderBottom.Length | Should -Be 84
+                $dashboardContent.Length | Should -Be 84
+                $dashboardContent | Should -Match "^┃.*┃$"
+            }
+        }
     }
 }

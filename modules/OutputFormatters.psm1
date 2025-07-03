@@ -248,14 +248,27 @@ function Write-StateTransitionsHeader-Elaborate {
     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     $targetText = if ($TargetState) { $TargetState } else { "Unknown" }
     
+    # Create properly aligned content (84 characters total for all lines)
+    $titleLine = "  🎯 Claude Task Runner v2.0 - Execution Report"
+    $titlePadding = 82 - $titleLine.Length  # 82 = 84 total - 2 pipes
+    $titleLinePadded = $titleLine + (" " * $titlePadding)
+    
+    $targetLine = "  🎪 Target Environment: $targetText | 📅 Started: $timestamp"
+    $targetPadding = 82 - $targetLine.Length
+    $targetLinePadded = $targetLine + (" " * $targetPadding)
+    
+    $matrixLine = "                           ⚙️ STATE EXECUTION MATRIX"
+    $matrixPadding = 82 - $matrixLine.Length
+    $matrixLinePadded = $matrixLine + (" " * $matrixPadding)
+    
     return @(
         "┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓",
-        "┃  🎯 Claude Task Runner v2.0 - Execution Report                              ┃",
-        "┃  🎪 Target Environment: $targetText | 📅 Started: $timestamp         ┃",
+        "┃$titleLinePadded┃",
+        "┃$targetLinePadded┃",
         "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛",
         "",
         "┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓",
-        "┃                           🏗️ STATE EXECUTION MATRIX                          ┃",
+        "┃$matrixLinePadded┃",
         "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛"
     )
 }
@@ -642,7 +655,7 @@ function Format-ElaborateOutput {
     $output += @(
         "",
         "┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓",
-        "┃                         📊 EXECUTION ANALYTICS DASHBOARD                     ┃",
+        "┃                         📊 EXECUTION ANALYTICS DASHBOARD                         ┃",
         "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛",
         "",
         "🏆 SUCCESS METRICS"
