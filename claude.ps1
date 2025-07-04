@@ -27,6 +27,10 @@ Set-ConfigPath -Path $script:ConfigPath
 # Set the global verbose flag for command execution
 $global:Verbose = $Verbose
 
+# Reset all module state to ensure clean runs (prevent state leakage between executions)
+StateManagement\Reset-StateMachineVariables
+StateVisualization\Reset-VisualizationState
+
 function Invoke-State {
     param(
         [string]$StateName,
@@ -229,10 +233,14 @@ try {
     # Track processed states for this run only
     $processedStates = New-Object System.Collections.Generic.HashSet[string]
     $success = Invoke-State -StateName $Target -Config $config -ProcessedStates $processedStates
-    
-    # Write the unified summary (format-aware)
+      # Write the unified summary (format-aware)
     StateVisualization\Write-StateSummary
     
+    # Clean up state before exit to prevent leakage to future runs
+    StateManagement\Reset-StateMachineVariables
+    StateVisualization\Reset-VisualizationState
+    Remove-Variable -Name "Verbose" -Scope Global -ErrorAction SilentlyContinue
+
     if ($success) {
         exit 0
     }
@@ -244,5 +252,11 @@ try {
 catch {
     Write-Log "Fatal error: $($_.Exception.Message)" "ERROR"
     Write-Log "Stack trace: $($_.ScriptStackTrace)" "ERROR"
+    
+    # Clean up state even on error
+    StateManagement\Reset-StateMachineVariables -ErrorAction SilentlyContinue
+    StateVisualization\Reset-VisualizationState -ErrorAction SilentlyContinue
+    Remove-Variable -Name "Verbose" -Scope Global -ErrorAction SilentlyContinue
+    
     exit 1
 }

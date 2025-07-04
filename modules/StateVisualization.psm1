@@ -714,8 +714,21 @@ function Show-ExecutionFlow {
     Write-Log -Level "SYSTEM" " "
 }
 
+<#
+.SYNOPSIS
+Resets all visualization state variables.
+
+.DESCRIPTION
+Clears all module-level state variables to ensure clean runs.
+#>
+function Reset-VisualizationState {
+    $script:CurrentOutputFormat = "Default"
+    $script:RealtimeFormatters = $null
+    $script:TargetState = $null
+}
+
 # Export module members
 Export-ModuleMember -Function Start-StateTransitions, Start-StateProcessing, 
     Write-StateCheck, Write-StateCheckResult, Start-StateActions, Start-StateAction,
     Complete-StateAction, Complete-State, Write-StateSummary, Get-StatusIcon, 
-    Get-StateSummaryForFormatters, Set-OutputFormat, Set-TargetState, Show-ExecutionFlow, Show-ExecutionFlow
+    Get-StateSummaryForFormatters, Set-OutputFormat, Set-TargetState, Show-ExecutionFlow, Reset-VisualizationState
