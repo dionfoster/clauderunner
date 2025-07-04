@@ -9,6 +9,8 @@ Import-Module "$PSScriptRoot\OutputFormatters.psm1"
 $script:CurrentOutputFormat = "Default"
 $script:RealtimeFormatters = $null
 $script:TargetState = $null
+$script:ExecutionSectionsShown = $false
+$script:StateProcessingCount = 0
 
 <#
 .SYNOPSIS
@@ -112,6 +114,19 @@ function Start-StateProcessing {
     
     $stateIcon = Get-SMStateIcon -StateName $StateName
     
+    # Show state details header before first state processing (for Medium format)
+    if (-not $script:ExecutionSectionsShown -and $script:CurrentOutputFormat -eq "Medium") {
+        Write-Log -Level "SYSTEM" " "
+        Write-Log -Level "SYSTEM" "🔍 STATE DETAILS"
+        Write-Log -Level "SYSTEM" "────────────────"
+        $script:ExecutionSectionsShown = $true
+    }
+    
+    # For Medium format, add spacing between states (except for the first state)
+    if ($script:CurrentOutputFormat -eq "Medium" -and $script:StateProcessingCount -gt 0) {
+        Write-Log -Level "SYSTEM" " "  # Add blank line before each state after the first
+    }
+    
     # Use the appropriate formatter for state start
     $output = & $script:RealtimeFormatters.StateStart -StateName $StateName -StateIcon $stateIcon -Dependencies $Dependencies
     if ($output) {
@@ -126,12 +141,8 @@ function Start-StateProcessing {
         }
     }
     
-    # Show state details header on first state processing (for Medium format)
-    if (-not $script:ExecutionSectionsShown -and $script:CurrentOutputFormat -eq "Medium") {
-        Write-Log -Level "SYSTEM" "🔍 STATE DETAILS"
-        Write-Log -Level "SYSTEM" "────────────────"
-        $script:ExecutionSectionsShown = $true
-    }
+    # Increment state processing count
+    $script:StateProcessingCount++
 }
 
 <#
@@ -192,7 +203,8 @@ function Write-StateCheckResult {
         [bool]$IsReady,
         [Parameter(Mandatory=$true)]
         [string]$CheckType,
-        [string]$AdditionalInfo = ""
+        [string]$AdditionalInfo = "",
+        [string]$EndpointUrl = ""
     )
     
     # Update state management based on check result
@@ -238,6 +250,9 @@ function Write-StateCheckResult {
         
         # Use the appropriate formatter for state check result with additional parameters
         $output = & $script:RealtimeFormatters.StateCheckResult -IsReady $IsReady -CheckType $CheckType -AdditionalInfo $AdditionalInfo -Duration $duration -Status $status
+    } elseif ($script:CurrentOutputFormat -eq "Medium") {
+        # For Medium format, pass the endpoint URL for proper display
+        $output = & $script:RealtimeFormatters.StateCheckResult -IsReady $IsReady -CheckType $CheckType -AdditionalInfo $AdditionalInfo -EndpointUrl $EndpointUrl
     } else {
         # Use the standard formatter for other formats
         $output = & $script:RealtimeFormatters.StateCheckResult -IsReady $IsReady -CheckType $CheckType -AdditionalInfo $AdditionalInfo
@@ -725,6 +740,8 @@ function Reset-VisualizationState {
     $script:CurrentOutputFormat = "Default"
     $script:RealtimeFormatters = $null
     $script:TargetState = $null
+    $script:ExecutionSectionsShown = $false
+    $script:StateProcessingCount = 0
 }
 
 # Export module members

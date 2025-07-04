@@ -27,10 +27,6 @@ Set-ConfigPath -Path $script:ConfigPath
 # Set the global verbose flag for command execution
 $global:Verbose = $Verbose
 
-# Reset all module state to ensure clean runs (prevent state leakage between executions)
-StateManagement\Reset-StateMachineVariables
-StateVisualization\Reset-VisualizationState
-
 function Invoke-State {
     param(
         [string]$StateName,
@@ -86,11 +82,11 @@ function Invoke-State {
             StateVisualization\Write-StateCheck -CheckType "Endpoint" -CheckDetails $stateConfig.readiness.checkEndpoint
             
             if (ReadinessChecks\Test-WebEndpoint -Uri $stateConfig.readiness.checkEndpoint -StateName $StateName) {
-                StateVisualization\Write-StateCheckResult -IsReady $true -CheckType "Endpoint" -AdditionalInfo "Status: 200"
+                StateVisualization\Write-StateCheckResult -IsReady $true -CheckType "Endpoint" -AdditionalInfo "Status: 200" -EndpointUrl $stateConfig.readiness.checkEndpoint
                 $skipActions = $true
             }
             else {
-                StateVisualization\Write-StateCheckResult -IsReady $false -CheckType "Endpoint"
+                StateVisualization\Write-StateCheckResult -IsReady $false -CheckType "Endpoint" -EndpointUrl $stateConfig.readiness.checkEndpoint
             }
         }
         elseif ($stateConfig.readiness.checkCommand) {
@@ -208,6 +204,9 @@ try {
     Configuration\Initialize-Environment
     $config = Get-Configuration
     
+    # Reset visualization state to ensure clean execution
+    StateVisualization\Reset-VisualizationState
+    
     # Get the final output format (parameter takes precedence over config)
     $finalOutputFormat = Configuration\Get-OutputFormat -Config $config -ParameterFormat $OutputFormat
     
@@ -235,11 +234,6 @@ try {
     $success = Invoke-State -StateName $Target -Config $config -ProcessedStates $processedStates
       # Write the unified summary (format-aware)
     StateVisualization\Write-StateSummary
-    
-    # Clean up state before exit to prevent leakage to future runs
-    StateManagement\Reset-StateMachineVariables
-    StateVisualization\Reset-VisualizationState
-    Remove-Variable -Name "Verbose" -Scope Global -ErrorAction SilentlyContinue
 
     if ($success) {
         exit 0
@@ -252,11 +246,5 @@ try {
 catch {
     Write-Log "Fatal error: $($_.Exception.Message)" "ERROR"
     Write-Log "Stack trace: $($_.ScriptStackTrace)" "ERROR"
-    
-    # Clean up state even on error
-    StateManagement\Reset-StateMachineVariables -ErrorAction SilentlyContinue
-    StateVisualization\Reset-VisualizationState -ErrorAction SilentlyContinue
-    Remove-Variable -Name "Verbose" -Scope Global -ErrorAction SilentlyContinue
-    
     exit 1
 }

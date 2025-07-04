@@ -181,12 +181,18 @@ function Write-StateTransitionsHeader-Medium {
 function Write-StateStart-Medium {
     param([string]$StateName, [string]$StateIcon, [string[]]$Dependencies)
     
+    # Add blank line before each state (except the first one) for better readability
+    # The StateVisualization module will handle determining if this is the first state
+    $output = @()
+    
     # Format: ▶ stateName (depends: dep1, dep2) or just ▶ stateName if no dependencies
     if ($Dependencies -and $Dependencies.Count -gt 0) {
-        return "▶ $StateName (depends: $($Dependencies -join ', '))"
+        $output += "▶ $StateName (depends: $($Dependencies -join ', '))"
     } else {
-        return "▶ $StateName"
+        $output += "▶ $StateName"
     }
+    
+    return $output
 }
 
 function Write-StateCheck-Medium {
@@ -545,12 +551,16 @@ function Format-MediumOutput {
     param([hashtable]$Summary, [bool]$Success, [string]$ErrorMessage, [double]$Duration)
     
     # For Medium format, the header, execution flow, and state details are already shown in real-time
-    # Only show the final summary line
+    # Only show the final summary line with a blank line before it (as per template)
     $successCount = @($Summary.States.Values | Where-Object { $_.Success -eq $true }).Count
     $totalCount = $Summary.States.Count
     $statusIcon = if ($Success) { "✅" } else { "❌" }
     
-    return "📈 SUMMARY: $statusIcon $successCount/$totalCount states completed successfully in $($Duration)s"
+    $output = @()
+    $output += " "  # Blank line before summary
+    $output += "📈 SUMMARY: $statusIcon $successCount/$totalCount states completed successfully in $($Duration)s"
+    
+    return $output
 }
 
 <#
@@ -623,7 +633,6 @@ function Format-ElaborateOutput {
                     $action = $state.Actions[$i]
                     $actionDuration = if ($action.Duration) { [math]::Round($action.Duration.TotalSeconds, 1) } else { 0 }
                     $actionCommand = if ($action.Command) { $action.Command } else { "Unknown" }
-                    $actionStatus = if ($action.Success) { "SUCCESS" } else { "FAILED" }
                     
                     $output += @(
                         "│  │  ┌─ 🛠️ ACTION $($i+1)/$($state.Actions.Count) ──────────────────────────────────────────────────┐   │",
