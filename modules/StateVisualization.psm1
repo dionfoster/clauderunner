@@ -726,7 +726,6 @@ function Show-ExecutionFlow {
     } else {
         Write-Log -Level "SYSTEM" "No states found"
     }
-    Write-Log -Level "SYSTEM" " "
 }
 
 <#
